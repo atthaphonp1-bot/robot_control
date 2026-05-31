@@ -37,3 +37,27 @@ Then open <http://localhost:8000/>. The axis cards / 3D view reflect the DB
 
 In production the EMS service uses `run.sh`, which picks the right interpreter and
 working directory based on `app/env.json`'s `ems_version`.
+
+## Offline operation
+
+The unit has **no internet at runtime**, so the control page has zero external
+dependencies — everything is self-hosted under `xyz_simulator/app/static/`:
+
+- **React / ReactDOM** — `static/js/vendor/*.production.min.js` (React 18.3.1).
+- **No in-browser Babel.** The JSX is **precompiled** at build time into
+  `static/js/robot_control.js`. The browser loads plain JS only.
+- **Fonts** — self-hosted woff2 in `static/fonts/` + `static/css/fonts.css`
+  (IBM Plex Sans 400/500/600/700, JetBrains Mono 400/500/600).
+
+### Editing the UI (during maintenance)
+
+The JSX source of record is `static/js/robot_control.src.jsx`. After editing it,
+rebuild the compiled bundle (fully offline — uses the bundled Babel in `tools/`):
+
+```bash
+cd xyz_simulator
+node tools/build_frontend.mjs   # regenerates app/static/js/robot_control.js
+```
+
+`tools/babel.standalone.js` is used only by this build step and is never served to
+the browser.
