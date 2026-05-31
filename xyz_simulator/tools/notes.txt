@@ -1,0 +1,2 @@
+copy "motor_movement_web.service" file to /etc/systemd/system
+enable service "systemctl enable motor_movement_web" 
