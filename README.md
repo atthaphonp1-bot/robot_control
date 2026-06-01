@@ -45,6 +45,31 @@ Then open <http://localhost:8000/>. The axis cards / 3D view reflect the DB
 In production the EMS service uses `run.sh`, which picks the right interpreter and
 working directory based on `app/env.json`'s `ems_version`.
 
+## Deploy to a unit (only swaps xyz_simulator)
+
+`deploy.sh` updates **only** `motor_control/xyz_simulator` on the unit — it never
+touches sibling code under `motor_control/`. It backs up the current folder,
+installs this repo's copy, **preserves the unit's own `app/env.json`** (keeping the
+repo default alongside as `app/env.json.repo`), and restarts the service.
+
+```bash
+# On the unit:
+git clone -b claude/inspiring-cray-SNZ0p \
+  https://github.com/atthaphonp1-bot/robot_control.git /tmp/rc_new
+sudo bash /tmp/rc_new/deploy.sh
+```
+
+It auto-detects the target (EMS 5 `/root/one_software/ems/...`, then EMS 4
+`/root/xsos/...`). Override if needed:
+
+```bash
+sudo TARGET_DIR=/path/to/motor_control/xyz_simulator SERVICE=motor_movement_web \
+  bash /tmp/rc_new/deploy.sh
+```
+
+The script prints a one-line rollback command (restore the timestamped `.bak.`).
+Remember the DBs live in `env.json`'s `database_path`, not in this repo.
+
 ## Offline operation
 
 The unit has **no internet at runtime**, so the control page has zero external
