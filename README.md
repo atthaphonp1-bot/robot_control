@@ -11,15 +11,22 @@ value in `app/env.json`.
 
 Robot movement on the page is still **simulated** (no hardware wiring).
 
+The repo layout mirrors the on-unit tree: `motor_control/xyz_simulator` matches
+`/root/one_software/ems/robot_control/motor_control/xyz_simulator` (EMS 5) /
+`/root/xsos/robot_control/motor_control/xyz_simulator` (EMS 4), so the repo root maps
+to the unit's `robot_control` directory and can be `git pull`ed directly.
+
 ## Layout
-- `xyz_simulator/app/main.py` — FastAPI app. Routes: `GET /` (new control UI),
-  `GET /manual`, `POST /load-parameters`, download endpoints.
-- `xyz_simulator/app/db.py` — `get_active_robot_static_db()` (ems_config resolver)
-  and `get_all_motors()`.
-- `xyz_simulator/app/templates/index.html` — the new control UI. The backend injects
-  `window.SERVER_AXES` (the motor rows keyed by X/Y/Z/G) which seeds the axis params.
-- `db/` — sample databases for local runs: `ems_config.db` and
-  `csos_alpha_robot_static.db` (the active unit's `robot_static_db`).
+- `motor_control/xyz_simulator/app/main.py` — FastAPI app. Routes: `GET /` (new
+  control UI), `GET /manual`, `POST /load-parameters`, download endpoints.
+- `motor_control/xyz_simulator/app/db.py` — `get_active_robot_static_db()`
+  (ems_config resolver) and `get_all_motors()`.
+- `motor_control/xyz_simulator/app/templates/index.html` — the new control UI. The
+  backend injects `window.SERVER_AXES` (the motor rows keyed by X/Y/Z/G) which seeds
+  the axis params.
+- `db/` — sample databases for local runs only: `ems_config.db` and
+  `csos_alpha_robot_static.db` (the active unit's `robot_static_db`). On the unit the
+  real DBs live in `env.json`'s `database_path` (e.g. `/root/one_software/common/db/`).
 
 ## Run locally
 ```bash
@@ -29,7 +36,7 @@ pip install -r requirements.txt
 #   "database_path": "<repo>/db/"
 # The active config in db/ems_config.db -> csos_alpha_robot_static.db (present).
 
-cd xyz_simulator
+cd motor_control/xyz_simulator
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 Then open <http://localhost:8000/>. The axis cards / 3D view reflect the DB
@@ -41,7 +48,7 @@ working directory based on `app/env.json`'s `ems_version`.
 ## Offline operation
 
 The unit has **no internet at runtime**, so the control page has zero external
-dependencies — everything is self-hosted under `xyz_simulator/app/static/`:
+dependencies — everything is self-hosted under `motor_control/xyz_simulator/app/static/`:
 
 - **React / ReactDOM** — `static/js/vendor/*.production.min.js` (React 18.3.1).
 - **No in-browser Babel.** The JSX is **precompiled** at build time into
@@ -55,7 +62,7 @@ The JSX source of record is `static/js/robot_control.src.jsx`. After editing it,
 rebuild the compiled bundle (fully offline — uses the bundled Babel in `tools/`):
 
 ```bash
-cd xyz_simulator
+cd motor_control/xyz_simulator
 node tools/build_frontend.mjs   # regenerates app/static/js/robot_control.js
 ```
 
