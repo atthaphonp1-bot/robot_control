@@ -79,9 +79,16 @@ const SCALE = { X: 400/RANGE.X.max, Y: 500/RANGE.Y.max, Z: 90/RANGE.Z.max, G: 9/
    App
    ============================================ */
 function App() {
-  // Position state in PULSE
+  // `pos` = last known/reported position (PULSE) — drives the UI (3D view,
+  // meters, readouts). Like the real controller, this is NOT pushed live; it
+  // only changes via Get Position / Get All (or a direct drag on the 3D view).
   const [pos, setPos] = useState({ X: RANGE.X.home, Y: RANGE.Y.home, Z: RANGE.Z.home, G: RANGE.G.home });
   const [tgt, setTgt] = useState({ X: RANGE.X.home, Y: RANGE.Y.home, Z: RANGE.Z.home, G: RANGE.G.home });
+  // The robot's actual simulated position, animating toward `tgt` in the
+  // background. Get Position / Get All sample this into `pos`.
+  const simPosRef = useRef({ X: RANGE.X.home, Y: RANGE.Y.home, Z: RANGE.Z.home, G: RANGE.G.home });
+  // Timestamp of the last successful position read, per axis (null = never read).
+  const [lastRead, setLastRead] = useState({ X: null, Y: null, Z: null, G: null });
   const [activeAxis, setActiveAxis] = useState('X');
   const [moving, setMoving] = useState(false);
   // Per-axis draft input value for the inline target editor.
@@ -146,28 +153,31 @@ function App() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log]);
 
-  // Animate pos -> tgt (when target changes via jog button, goto, or home)
+  // Animate the robot's actual position toward `tgt` in the background
+  // (jog/goto/home). Drives `simPosRef` (sampled by Get Position / Get All)
+  // and the `moving` status — does NOT touch `pos`, since the real
+  // controller doesn't report position in real time either.
   useEffect(() => {
     if (draggingRef.current) return;       // never animate while dragging
-    const diff = AXES.some(a => Math.abs(pos[a] - tgt[a]) > 1);
+    const diff = AXES.some(a => Math.abs(simPosRef.current[a] - tgt[a]) > 1);
     if (!diff) { if (moving) setMoving(false); return; }
     setMoving(true);
     let raf;
-    const start = { ...pos };
+    const start = { ...simPosRef.current };
     const t0 = performance.now();
     const dist = Math.max(...AXES.map(a => Math.abs(tgt[a] - start[a])));
     const dur = Math.max(220, (dist / motor.speed) * 1000);
     const tick = (t) => {
       const k = Math.min(1, (t - t0) / dur);
       const e = easeInOut(k);
-      setPos({
+      simPosRef.current = {
         X: start.X + (tgt.X - start.X) * e,
         Y: start.Y + (tgt.Y - start.Y) * e,
         Z: start.Z + (tgt.Z - start.Z) * e,
         G: start.G + (tgt.G - start.G) * e,
-      });
+      };
       if (k < 1) raf = requestAnimationFrame(tick);
-      else setMoving(false);
+      else { simPosRef.current = { ...tgt }; setMoving(false); }
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -201,6 +211,7 @@ function App() {
 
   const onDrag = useCallback((axis, value) => {
     const v = Math.round(clamp(value, RANGE[axis].min, RANGE[axis].max));
+    simPosRef.current = { ...simPosRef.current, [axis]: v };
     setPos(p => ({ ...p, [axis]: v }));
     setTgt(t => ({ ...t, [axis]: v }));
   }, []);
@@ -264,26 +275,46 @@ function App() {
     });
   };
 
+  // Read the robot's actual position. The real controller doesn't push
+  // position updates, so `pos` only changes here — sampling the in-progress
+  // simulated motion held in `simPosRef`.
+  const getPosition = useCallback((axis) => {
+    const val = Math.round(simPosRef.current[axis]);
+    setPos(p => ({ ...p, [axis]: val }));
+    setLastRead(r => ({ ...r, [axis]: nowStamp() }));
+    pushLog({ kind:'api', dir:'GET', target: conn.apiUrl + '/position',
+      msg: <>{'{ '}<span className="k">"axis"</span>:<span className="s">"{axis}"</span>, <span className="k">"pos"</span>:<span className="n">{val}</span>, <span className="k">"unit"</span>:<span className="s">"{motor.unit}"</span> {'}'}</>});
+  }, [conn.apiUrl, motor.unit, pushLog]);
+
+  const getAllPositions = useCallback(() => {
+    const snap = {
+      X: Math.round(simPosRef.current.X), Y: Math.round(simPosRef.current.Y),
+      Z: Math.round(simPosRef.current.Z), G: Math.round(simPosRef.current.G),
+    };
+    setPos(snap);
+    const stamp = nowStamp();
+    setLastRead({ X: stamp, Y: stamp, Z: stamp, G: stamp });
+    pushLog({ kind:'api', dir:'GET', target: conn.apiUrl + '/position',
+      msg: <>{'{ '}<span className="k">"x"</span>:<span className="n">{snap.X}</span>, <span className="k">"y"</span>:<span className="n">{snap.Y}</span>, <span className="k">"z"</span>:<span className="n">{snap.Z}</span>, <span className="k">"g"</span>:<span className="n">{snap.G}</span>, <span className="k">"unit"</span>:<span className="s">"{motor.unit}"</span> {'}'}</>});
+  }, [conn.apiUrl, motor.unit, pushLog]);
+
   // Generic move queue. Each item: { axis, target, label?, stepId? }.
   // Used by Home-all (G → Z → Y → X) and by Sequence Move.
   const moveQueueRef = useRef([]);
   const wasMovingRef = useRef(false);
-  // Live mirrors of state that the queue drainer needs to peek without
-  // closure staleness.
-  const posRef = useRef(pos);
-  useEffect(() => { posRef.current = pos; }, [pos]);
   const seqRunningRef = useRef(false);
 
   // Pop the next move from the queue and dispatch it. If the next target
-  // matches the current position (no-op), skip it and try the one after,
-  // since otherwise the animation useEffect won't fire and the queue stalls.
+  // matches the robot's actual position (no-op), skip it and try the one
+  // after, since otherwise the animation useEffect won't fire and the queue
+  // stalls.
   const drainNext = () => {
     while (moveQueueRef.current.length > 0) {
       const next = moveQueueRef.current.shift();
       if (next.stepId != null) setActiveStepId(next.stepId);
       pushLog({ kind:'api', dir:'POST', target: conn.apiUrl + (next.label || '/move'),
         msg: <>{next.label || 'queue'}: <span className="s">"{next.axis}"</span> → <span className="n">{Math.round(next.target)}</span></>});
-      const cur = posRef.current[next.axis];
+      const cur = simPosRef.current[next.axis];
       if (Math.abs(cur - next.target) > 1) {
         // Real move — kick the animation, then wait for `moving` to settle.
         setTgt(t => ({ ...t, [next.axis]: next.target }));
@@ -305,6 +336,17 @@ function App() {
     wasMovingRef.current = moving;
     // eslint-disable-next-line
   }, [moving]);
+
+  // Freeze the robot at its actual current (simulated) position — cancels any
+  // pending target so the animation stops right where the robot is.
+  const holdHere = () => {
+    const here = {
+      X: Math.round(simPosRef.current.X), Y: Math.round(simPosRef.current.Y),
+      Z: Math.round(simPosRef.current.Z), G: Math.round(simPosRef.current.G),
+    };
+    simPosRef.current = here;
+    setTgt(here);
+  };
 
   const home = () => {
     pushLog({ kind:'api', dir:'POST', target: conn.apiUrl + '/home',
@@ -366,11 +408,11 @@ function App() {
     seqRunningRef.current = false;
     setSeqRunning(false);
     setActiveStepId(null);
-    setTgt({ ...pos });
+    holdHere();
     pushLog({ kind:'err', dir:'EVT', target: '/sequence', msg: <>sequence stopped</>});
   };
   const estop = () => {
-    setTgt({ ...pos });
+    holdHere();
     draggingRef.current = false;
     pushLog({ kind:'err', dir:'EVT', target: conn.mqttTopic + '/estop', msg: <>EMERGENCY STOP latched — all axes halted</>});
   };
@@ -493,7 +535,10 @@ function App() {
                 </div>
                 <div className="stage-axisinfo">
                   <div className="lbl">Position · {activeAxis} · {RANGE[activeAxis].label}</div>
-                  <div className="val">{Math.round(pos[activeAxis]).toLocaleString()}<span className="u-suffix">{motor.unit}</span></div>
+                  <div className={`val ${moving ? 'stale' : ''}`}>{Math.round(pos[activeAxis]).toLocaleString()}<span className="u-suffix">{motor.unit}</span></div>
+                  <div style={{marginTop:2, fontSize:9.5, color:'#9aa0a6'}}>
+                    {lastRead[activeAxis] ? `read ${lastRead[activeAxis]}` : 'not read yet — click ⟲ Get Pos'}
+                  </div>
                   <div style={{marginTop:8, fontSize:10, color:'#9aa0a6', display:'flex', justifyContent:'space-between'}}>
                     <span>min {RANGE[activeAxis].min.toLocaleString()}</span><span>max {RANGE[activeAxis].max.toLocaleString()}</span>
                   </div>
@@ -520,7 +565,8 @@ function App() {
               <div className="jog">
                 <div className="jog-topbar">
                   <button className="btn" onClick={home} title="Home sequence: G → Z → Y → X">Home all</button>
-                  <button className="btn" onClick={() => setTgt({ ...pos })} title="Cancel pending target — hold at current position">Hold</button>
+                  <button className="btn" onClick={holdHere} title="Cancel pending target — hold at current position">Hold</button>
+                  <button className="btn" onClick={getAllPositions} title="Read the actual position of every axis (X, Y, Z, G)">⟲ Get All</button>
                 </div>
                 {AXES.map(a => {
                   const r = RANGE[a];
@@ -545,7 +591,17 @@ function App() {
                         {RANGE[a].label}
                       </div>
                       <div className="right">
-                        <div className="axis-pos">{Math.round(pos[a]).toLocaleString()}<span className="u">{motor.unit}</span></div>
+                        <div className="axis-pos-wrap">
+                          <div className={`axis-pos ${moving ? 'stale' : ''}`} title={lastRead[a] ? `Last read ${lastRead[a]}` : 'Not read yet — click ⟲ to read the actual position'}>
+                            {Math.round(pos[a]).toLocaleString()}<span className="u">{motor.unit}</span>
+                          </div>
+                          <div className="axis-pos-stamp">{lastRead[a] ? `read ${lastRead[a]}` : 'not read'}</div>
+                        </div>
+                        <button
+                          className="axis-getpos"
+                          title={`Get actual ${a} position from controller`}
+                          onClick={(e) => { e.stopPropagation(); getPosition(a); }}
+                        >⟲</button>
                         <button
                           className="axis-gear"
                           title="Edit axis parameters"

@@ -471,6 +471,7 @@
     font-weight: 600;
   }
   .axis-card.active .axis-tag { background: var(--accent); }
+  .axis-card .axis-pos-wrap { display: flex; flex-direction: column; align-items: flex-end; }
   .axis-card .axis-pos {
     font-family: var(--mono);
     font-size: 13px;
@@ -479,6 +480,15 @@
     font-variant-numeric: tabular-nums;
   }
   .axis-card .axis-pos .u { color: var(--muted); font-size: 10.5px; margin-left: 2px; }
+  /* Position not yet (re)read while the robot may still be moving */
+  .axis-card .axis-pos.stale, .stage-axisinfo .val.stale { color: var(--muted); font-style: italic; }
+  .axis-card .axis-pos-stamp {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    line-height: 1;
+    margin-top: 2px;
+  }
   /* Inline target editor inside each axis card */
   .axis-card .target-row {
     display: flex; align-items: center;
@@ -692,8 +702,9 @@
   .home-marker { fill: oklch(0.62 0.14 150); }
   .home-text { font-family: var(--mono); font-size: 7px; fill: #4a4e54; letter-spacing: 0.05em; }
 
-  /* ===== Gear button on axis card ===== */
-  .axis-card .axis-gear {
+  /* ===== Gear / Get-position buttons on axis card ===== */
+  .axis-card .axis-gear,
+  .axis-card .axis-getpos {
     border: 1px solid var(--line);
     background: #fff;
     width: 24px; height: 24px;
@@ -706,7 +717,8 @@
     margin-left: 6px;
     transition: background .1s, color .1s, border-color .1s;
   }
-  .axis-card .axis-gear:hover { background: var(--panel-2); color: var(--accent-ink); border-color: var(--accent); }
+  .axis-card .axis-gear:hover,
+  .axis-card .axis-getpos:hover { background: var(--panel-2); color: var(--accent-ink); border-color: var(--accent); }
   .axis-card .row .right { display: flex; align-items: center; }
 
   /* ===== Speed / Acc / Step trio ===== */
