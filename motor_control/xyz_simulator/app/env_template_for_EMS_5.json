@@ -1,0 +1,8 @@
+[
+    {
+        "version": "1.0.0.2",
+        "ems_version": "5",
+        "database_path": "/root/one_software/common/db/",
+        "database": "csos_alpha_robot_static.db"
+    }
+]

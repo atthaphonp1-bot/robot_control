@@ -1,0 +1,18 @@
+1. create motor_movement_web.service in /etc/systemd/system 
+    (goto that directory, and run -> sudo nano motor_movement_web.service)
+2. copy and paste the following content [line 4 to 15 inclusive]
+[Unit]
+Description=motor movement web
+After=motor_service.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=/bin/bash -c "/root/xsos/robot_control/motor_control/xyz_simulator/run.sh"
+
+[Install]
+WantedBy=multi-user.target
+
+3. Enable service 'systemctl enable motor_movement_web'
+4. Start service 'systemctl start motor_movement_web'

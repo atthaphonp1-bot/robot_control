@@ -1,0 +1,8 @@
+[
+    {
+        "version": "1.0.0.2",
+        "ems_version": "4",
+        "database_path": "/root/xsos/db/",
+        "database": "static_robot.db"
+    }
+]

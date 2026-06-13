@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSOS Prototyp 2</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        .wrapper {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .centered-div {
+            border: 2px solid black;
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        .header, .footer {
+            background-color: #f8f9fa;
+            padding: 10px;
+            text-align: center;
+        }
+        .content {
+            flex: 1;  /* Takes up remaining space between header and footer */
+            padding: 20px;
+            overflow: auto;
+        }
+        #sliderValue {
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .smuContainer{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .sliderContainer {
+            display: flex;
+            justify-content: left;
+            align-items: left;
+            /* margin-bottom: 20px; */
+        }
+        .testContainer {
+            display: flex;
+            justify-content: right;
+            align-items: left;
+            margin-bottom: 20px;
+        }
+        .verticalSlider {
+            /* -webkit-appearance: slider-vertical; */
+            width: 20px;
+            height: 200px;
+            margin-right: 20px;
+        }
+        #slider {
+            width: 100%;
+        }
+        .controlBox {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-right: 20px;
+            border: 2px solid black;
+            padding: 2rem;
+        }
+
+        /* Remove the track, leaving only the thumb (the blue point) */
+        input[type="range"].GripperSlider {
+            -webkit-appearance: none;  /* Override default styling */
+            appearance: none;
+            width: 100%;
+            height: 10px; /* Thickness of the gray bar */
+            background: #ddd;  /* Make the track transparent */
+            border-radius: 5px;
+            outline: none;
+        }
+
+        /* Horizontal slider thumb */
+        input[type="range"].GripperSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: red;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* Remove the track, leaving only the thumb (the blue point) */
+        input[type="range"].XSlider {
+            -webkit-appearance: none;  /* Override default styling */
+            appearance: none;
+            width: 100%;
+            height: 10px; /* Thickness of the gray bar */
+            background: #ddd;  /* Make the track transparent */
+            border-radius: 5px;
+            outline: none;
+        }
+
+        /* Horizontal slider thumb */
+        input[type="range"].XSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: red;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+
+        /* Style for Vertical Slider 1 */
+        input[type="range"].verticalSlider1[orient="vertical"] {
+            writing-mode: vertical-lr;
+            -webkit-appearance: none;
+            height: 360px;
+            width: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #ddd;
+            outline: none;
+            transform: rotate(180deg);
+        }
+
+        /* Vertical Slider 1 Thumb */
+        input[type="range"].verticalSlider1[orient="vertical"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: red; /* Different color for the thumb */
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* Style for Vertical Slider 2 */
+        input[type="range"].verticalSlider2[orient="vertical"] {
+            writing-mode: vertical-lr;
+            -webkit-appearance: none;
+            height: 125px;
+            width: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #bbb; /* Different background color */
+            outline: none;
+            /* transform: rotate(180deg); */
+        }
+
+        /* Vertical Slider 2 Thumb */
+        input[type="range"].verticalSlider2[orient="vertical"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: blue; /* Different color for the thumb */
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .bordered-div{
+            margin: 10rem; 
+            padding: 2rem; 
+            border: 2px solid black;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="centered-div">
+            <div class="header">
+                <h1>CSOS PROTOTYPE 2</h1>
+            </div>
+            <div class="content">
+                <div class="row">
+                    <div class="col-sm-4">
+                        <!-- Camera POV (Motor-Y) | Layout POV (Motor-X) -->
+                        <div class="form-group controlBox">
+                            <h5>Motor (0) + (1) </h5><br>
+                            <input type="range" class="verticalSlider verticalSlider1" id="verticalSlider1" min="0" max="114150" value="0" step="1" orient="vertical">
+                            <br>
+                            <div class="row" style="text-align: center;">
+                                <div class="col-sm-6">
+                                    <label><b>Steps</b></label>
+                                    <input type="text" class="form-control" id="verticalStep1" placeholder="Step" value="100">
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <!-- <div id="verticalValue2"><b>Position</b>: 0</div> -->
+                                    <label><b>Position</b></label>
+                                    <input type="text" class="form-control" id="verticalValue1" disabled>
+                                </div>
+                            </div>
+                            <button id="moveButtonVertical1" style="display: none;">Move Vertical 1</button>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        
+                    </div>
+                    <div class="col-sm-4">
+                        <!-- Updown Motor -->
+                        <div class="form-group controlBox">
+                            <h5>Updown (3) </h5><br>
+                            <input type="range" class="verticalSlider verticalSlider2" id="verticalSlider2" min="0" max="4000" value="0" step="1" orient="vertical">
+                            <br>
+                            <div class="row" style="text-align: center;">
+                                <div class="col-sm-6">
+                                    <label><b>Steps</b></label>
+                                    <input type="text" class="form-control" id="verticalStep2" placeholder="Step" value="100">
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <!-- <div id="verticalValue2"><b>Position</b>: 0</div> -->
+                                    <label><b>Position</b></label>
+                                    <input type="text" class="form-control" id="verticalValue2" disabled>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" id="moveButtonVertical2" style="display: none;">Move Vertical 2</button>
+                        </div>
+
+                        <p></p>
+
+                        <!-- Gripper Motor -->
+                        <div class="form-group controlBox">
+                            <h5>Gripper (4)</h5><br>
+                            <input type="range" class="GripperSlider" id="gslider" min="0" max="20" value="0" step="1">
+                            <br>
+
+                            <div class="row" style="text-align: center;">
+                                <div class="col-sm-6">
+                                    <label><b>Steps</b></label>
+                                    <input type="text" class="form-control" id="GStep" placeholder="Step" value="10">
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <!-- <div id="verticalValue2"><b>Position</b>: 0</div> -->
+                                    <label><b>Position</b></label>
+                                    <input type="text" class="form-control" id="gsliderValue" disabled>
+                                </div>
+                            </div>
+                            <button id="gmoveButtonHorizontal" style="display: none;">Move Gripper</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <!-- Motor (X)-->
+                <div class="form-group controlBox">
+                    <h5>Motor (2) </h5><br>
+                    <input type="range" id="xslider" class="XSlider" min="0" max="158500" value="0" step="1">
+                    <br>
+                    <div class="row" style="text-align: center;">
+                        <div class="col-sm-6">
+                            <label><b>Steps</b></label>
+                            <input type="number" class="form-control" id="XStep" placeholder="Step" value="100">
+                        </div>
+
+                        <div class="col-sm-6">
+                            <label><b>Position</b></label>
+                            <input type="text" class="form-control" id="xsliderValue" disabled>
+                        </div>
+                    </div>
+                    <button id="xmoveButtonHorizontal" style="display: none;">Move Horizontal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.6/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/5.3.0/js/bootstrap.min.js"></script>
+
+    <script>
+        // Horizontal Slider and Button
+        const xslider = document.getElementById('xslider');
+        const xsliderValue = document.getElementById('xsliderValue');
+        const moveButtonHorizontal = document.getElementById('xmoveButtonHorizontal');
+        const horizontalStep = document.getElementById('XStep');
+
+        moveButtonHorizontal.addEventListener('click', function() {
+            moveHorizontalSlider(parseInt(horizontalStep.value));
+        });
+
+        xslider.addEventListener('input', function() {
+            xsliderValue.value = xslider.value;
+        });
+
+        // Second Horizontal Slider 
+        // Horizontal Slider and Button
+        const gslider = document.getElementById('gslider');
+        const gsliderValue = document.getElementById('gsliderValue');
+        const gmoveButtonHorizontal = document.getElementById('gmoveButtonHorizontal');
+        const ghorizontalStep = document.getElementById('GStep');
+
+        moveButtonHorizontal.addEventListener('click', function() {
+            moveHorizontalSlider2(parseInt(ghorizontalStep.value));
+        });
+
+        gslider.addEventListener('input', function() {
+            gsliderValue.value = gslider.value;
+        });
+
+        // First Vertical Slider
+        const verticalSlider1 = document.getElementById('verticalSlider1');
+        const verticalValue1 = document.getElementById('verticalValue1');
+        const moveButtonVertical1 = document.getElementById('moveButtonVertical1');
+        const verticalStep1 = document.getElementById('verticalStep1');
+
+        moveButtonVertical1.addEventListener('click', function() {
+            moveVerticalSlider1(parseInt(verticalStep1.value));
+        });
+
+        verticalSlider1.addEventListener('input', function() {
+            verticalValue1.value = verticalSlider1.value;
+        });
+
+        // Second Vertical Slider
+        const verticalSlider2 = document.getElementById('verticalSlider2');
+        const verticalValue2 = document.getElementById('verticalValue2');
+        const moveButtonVertical2 = document.getElementById('moveButtonVertical2');
+        const verticalStep2 = document.getElementById('verticalStep2');
+
+        moveButtonVertical2.addEventListener('click', function() {
+            moveVerticalSlider2(parseInt(verticalStep2.value));
+        });
+
+        verticalSlider2.addEventListener('input', function() {
+            verticalValue2.value = "Position: " + verticalSlider2.value;
+        });
+
+        // Keyboard Controls
+        document.addEventListener('keydown', function(event) {
+            const stepValueHorizontal = parseInt(horizontalStep.value);
+            const stepValueGripper = parseInt(ghorizontalStep.value);
+            const stepValueVertical1 = parseInt(verticalStep1.value);
+            const stepValueVertical2 = parseInt(verticalStep2.value);
+
+            switch(event.key) {
+                // Horizontal Slider
+                case 'l': // Letter l for Light
+                    moveHorizontalSlider(-stepValueHorizontal);
+                    break;
+                case 'ArrowRight':
+                    moveHorizontalSlider(stepValueHorizontal);
+                    break;
+
+                // Gripper Slider
+                case 'g':
+                    moveHorizontalSlider2(stepValueGripper);
+                    break;
+                case 'r':
+                    moveHorizontalSlider2(-stepValueGripper);
+                    break;
+
+                // First Vertical Slider
+                case '-': // ArrowUp
+                    moveVerticalSlider1(stepValueVertical1);
+                    break;
+                case 'x': // ArrowDown
+                    moveVerticalSlider1(-stepValueVertical1);
+                    break;
+
+                // Second Vertical Slider (use "W" for up and "S" for down)
+                case 'd':
+                    moveVerticalSlider2(stepValueVertical2);
+                    break;
+                case 'u':
+                    moveVerticalSlider2(-stepValueVertical2);
+                    break;
+            }
+        });
+
+        // Base URL
+        const BASE_URL = "http://192.168.100.226:5001/motor_service";
+
+        // Functions for Moving Sliders
+        function moveHorizontalSlider(step){
+            let currentValue = Math.abs(parseInt(xslider.value));
+            let newValue = currentValue + step;
+
+            if (newValue > 158500) newValue = 158500;
+            if (newValue < 0) newValue = 0;
+
+            // alert("Moved from (2) : " + -currentValue + " to : " + -newValue);
+            move_motor(2, -currentValue, -newValue);
+
+            xslider.value = newValue;
+            xsliderValue.value = -newValue;
+        }
+
+        function moveHorizontalSlider2(step) {
+            let currentValue = Math.abs(parseInt(gslider.value));
+            let newValue = currentValue + step;
+
+            if (newValue > 20) newValue = 20;
+            if (newValue < 0) newValue = 0;
+
+            // alert("Moved Motor :: (4) from : " + -currentValue + " to : " + -newValue);
+            move_motor(4, -currentValue, -newValue);
+
+            gslider.value = newValue;
+            gsliderValue.value = -newValue;
+        }
+
+        function moveVerticalSlider1(step) {
+            let currentValue = Math.abs(parseInt(verticalSlider1.value));
+            let newValue = currentValue + step;
+
+            if (newValue > 114150) newValue = 114150;
+            if (newValue < 0) newValue = 0;
+
+            // alert("Moved Motor (1) from : " + -currentValue + " to : " + -newValue);
+            move_motor(1, -currentValue, -newValue);
+
+            verticalSlider1.value = newValue;
+            verticalValue1.value = -newValue;
+        }
+
+        // Updown motor (Motor-Z)
+        function moveVerticalSlider2(step) {
+            let currentValue = Math.abs(parseInt(verticalSlider2.value));
+            let newValue = currentValue + step;
+
+            if (newValue > 4000) newValue = 4000;
+            if (newValue < 0) newValue = 0;
+
+            // alert("Moved Motor (3) from : " + -currentValue + " to : " + -newValue);
+            move_motor(3, currentValue, newValue);
+
+            verticalSlider2.value = newValue;
+            verticalValue2.value = newValue;
+        }
+
+        async function move_motor(id, from_step, to_step){
+          var motor_code = id;
+
+          if(motor_code == 1){
+            var speed = 2000;
+            var acceleration = 100;
+          }
+          else if(motor_code == 2){
+            var speed = 2000;
+            var acceleration = 100;
+          }
+          else if(motor_code == 3){
+            var speed = 500;
+            var acceleration = 500;
+          }
+          else if(motor_code == 4){
+            var speed = 2;
+            var acceleration = 100;
+          }
+          else{
+            var speed = 0;
+            var acceleration = 0;
+          }
+
+          var step = to_step;
+          var method = 1;
+          var movement_type = "absolute";
+
+          var flag = confirm("Motor " + motor_code + " is being moved \nSpeed = " + speed + "\nAcceleration = "+ acceleration + "\nStep = "+ step + "\nMethod = " + method);
+
+          if(flag){
+            // Call API
+            await move_api(id, step, speed, acceleration, method);
+          }
+        }
+
+        async function move_api(motor_axis_no, step, speed, acceleration, method){
+          // Call API
+          const data = {
+            "motor_axis_no": motor_axis_no,
+            "method": method,
+            "pulse": step,
+            "speed": speed,
+            "acceleration": acceleration
+          };
+          const url = `${BASE_URL}/v1/gen2/motor/move`;
+          var res = await call_api(url, data);   
+
+          if(res){
+            // Update Status
+            // process_motor_result(motor_axis_no, res); 
+          }
+          else{
+            alert("Moving motor failed");
+          }
+        }
+
+        async function call_api(url, data) {
+          try {
+              const response = await fetch(url, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(data)
+              });
+
+              if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+              }
+
+              const responseData = await response.json();
+              return responseData;
+          } catch (error) {
+              console.error('Error sending data:', error);
+              return null;
+          }
+        }
+
+        async function get_encoder_position(id){
+          await get_encoder_position_api(id);
+        }
+
+        async function get_encoder_position_api(motor_axis_no){
+          // Call API
+          const data = {
+            "motor_axis_no": motor_axis_no,
+            "position_type": "encoder"
+          };
+          
+          const url = `${BASE_URL}/v1/gen2/motor/position`;
+          var res = await call_api(url, data);
+
+          // Update Encoder Position
+          if(res){
+            var r = JSON.stringify(res)
+            r = JSON.parse(r);
+            // alert("MOTOR POSITION " + motor_axis_no + " : " + r["data"]["position"]);
+            if(motor_axis_no == 4){
+                gslider.value = Math.round(Math.abs(r["data"]["position"]) / 4);
+                gsliderValue.value = Math.round(r["data"]["position"] / 4);
+            }
+            else if(motor_axis_no == 3){
+                verticalSlider2.value = Math.round(r["data"]["position"]/4);
+                verticalValue2.value = Math.round(r["data"]["position"] / 4);
+            }
+            else if(motor_axis_no == 2){
+                xslider.value = Math.round(Math.abs(r["data"]["position"]) / 2);
+                xsliderValue.value = Math.round(r["data"]["position"] / 2);
+            }
+            else if(motor_axis_no == 1){
+                verticalSlider1.value = Math.round(Math.abs(r["data"]["position"]) / 2);
+                verticalValue1.value = Math.round(r["data"]["position"] / 2);
+            }
+          }
+        }
+
+        window.onload = function() {
+            get_encoder_position(4);
+            get_encoder_position(3);
+            get_encoder_position(2);
+            get_encoder_position(1);
+        };
+
+    </script>
+</body>
+</html>

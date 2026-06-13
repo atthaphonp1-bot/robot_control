@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoomable Image with Pixel Coordinates</title>
+    <style>
+        /* Styles for the main page */
+        .image-container {
+            text-align: center;
+            margin: 20px;
+        }
+
+        .image-container img {
+            max-width: 100%;
+            cursor: pointer;
+        }
+
+        /* Styles for the modal */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0, 0, 0, 0.8); /* Black background with opacity */
+        }
+
+        .modal-content {
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            text-align: center;
+            position: relative;
+        }
+
+        .controls {
+            margin-bottom: 10px;
+        }
+
+        button {
+            margin: 0 5px;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        img {
+            max-width: 100%;
+            transition: transform 0.2s;
+            transform-origin: center;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Style for the pixel coordinates display */
+        #coordinates {
+            position: absolute;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            border-radius: 5px;
+            display: none; /* Initially hidden */
+        }
+    </style>
+</head>
+<body>
+
+<div class="image-container">
+    <h3>Click on the image to view in a modal</h3>
+    <img id="thumbnail-image" src="http://192.168.100.226/snapshot" alt="Thumbnail Image" onclick="openModal()">
+</div>
+
+<!-- The Modal -->
+<div id="imageModal" class="modal">
+    <div class="modal-content">
+        <span onclick="closeModal()" style="cursor:pointer; float:right; font-size:30px; color:white;">&times;</span>
+        <h3>Image box that user can zoom in/out</h3>
+        <img id="snapshot-image" src="http://192.168.100.226/snapshot" alt="Zoom Image" 
+             onmousemove="showCoordinates(event)" onmouseout="hideCoordinates()"
+             onwheel="zoomImage(event)">
+        <div id="coordinates"></div>
+    </div>
+</div>
+
+<script>
+    let scale = 1;
+
+    function openModal() {
+        document.getElementById("imageModal").style.display = "block";
+    }
+
+    function closeModal() {
+        document.getElementById("imageModal").style.display = "none";
+        resetImageScale(); // Reset scale when closing modal
+    }
+
+    function zoomImage(event) {
+        event.preventDefault(); // Prevent the default scroll behavior
+        
+        if (event.deltaY < 0) {
+            scale += 0.1; // Zoom in
+        } else {
+            scale = Math.max(scale - 0.1, 1); // Zoom out but not below 1
+        }
+        
+        updateImageScale();
+    }
+
+    function updateImageScale() {
+        const imgElement = document.getElementById('snapshot-image');
+        imgElement.style.transform = `scale(${scale})`;
+    }
+
+    function resetImageScale() {
+        scale = 1; // Reset scale to original size
+        updateImageScale(); // Apply reset
+    }
+
+    function showCoordinates(event) {
+        const imgElement = document.getElementById('snapshot-image');
+        const rect = imgElement.getBoundingClientRect();
+        
+        // Calculate the mouse position relative to the image
+        const x = Math.round(event.clientX - rect.left);
+        const y = Math.round(event.clientY - rect.top);
+
+        // Display the coordinates
+        const coordinatesDisplay = document.getElementById('coordinates');
+        coordinatesDisplay.style.display = 'block';
+        coordinatesDisplay.style.left = `${event.clientX - rect.left + 10}px`;
+        coordinatesDisplay.style.top = `${event.clientY - rect.top + 10}px`;
+        coordinatesDisplay.textContent = `X: ${x}, Y: ${y}`;
+    }
+
+    function hideCoordinates() {
+        const coordinatesDisplay = document.getElementById('coordinates');
+        coordinatesDisplay.style.display = 'none';
+    }
+
+    // Close the modal when clicking anywhere outside of it
+    window.onclick = function(event) {
+        const modal = document.getElementById("imageModal");
+        if (event.target === modal) {
+            closeModal();
+        }
+    }
+</script>
+
+</body>
+</html>

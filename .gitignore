@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Generated build artifact (reproduce with tools/build_standalone.py)
+robot_control_standalone.html

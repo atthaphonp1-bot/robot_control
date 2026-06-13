@@ -1,0 +1,1369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Gantry Robot · Control</title>
+<!-- Self-hosted fonts (offline); see app/static/css/fonts.css -->
+<link href="/static/css/fonts.css" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #ececec;
+    --bg-deep: #dadcdf;
+    --panel: #fafafa;
+    --panel-2: #f3f3f1;
+    --ink: #15171a;
+    --ink-2: #3a3d42;
+    --muted: #757a82;
+    --line: #d8d9dc;
+    --line-soft: #e6e7e9;
+    --accent: oklch(0.62 0.18 245);
+    --accent-soft: oklch(0.62 0.18 245 / 0.12);
+    --accent-ink: oklch(0.42 0.18 245);
+    --ok: oklch(0.62 0.14 150);
+    --warn: oklch(0.72 0.14 70);
+    --danger: oklch(0.58 0.20 25);
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.04);
+    --radius: 6px;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    --sans: 'IBM Plex Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--bg);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; }
+  input, select { font-family: inherit; }
+
+  /* ===== App shell ===== */
+  .app {
+    display: grid;
+    grid-template-rows: 52px 1fr 180px;
+    height: 100vh;
+    min-height: 720px;
+  }
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 0 18px;
+    background: #1d2024;
+    color: #e9eaec;
+    border-bottom: 1px solid #0c0e10;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+  .brand .mark {
+    width: 22px; height: 22px;
+    background: var(--accent);
+    border-radius: 4px;
+    position: relative;
+  }
+  .brand .mark::before {
+    content: ""; position: absolute; inset: 5px;
+    border: 1.5px solid #fff; border-radius: 2px;
+  }
+  .brand .mark::after {
+    content: ""; position: absolute;
+    width: 5px; height: 5px; background: #fff;
+    top: 8px; left: 8px; border-radius: 1px;
+  }
+  .brand small {
+    color: #8d9299; font-weight: 400; margin-left: 6px;
+    font-family: var(--mono); font-size: 11px;
+  }
+  .pills { display: flex; gap: 8px; margin-left: auto; align-items: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #2a2e33;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: #cdd0d4;
+    letter-spacing: 0.02em;
+  }
+  .pill .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.04);
+  }
+  .pill.ok .dot { background: var(--ok); box-shadow: 0 0 6px oklch(0.62 0.14 150 / 0.6); }
+  .pill.warn .dot { background: var(--warn); }
+  .pill.bad .dot { background: var(--danger); }
+  .estop {
+    margin-left: 10px;
+    padding: 6px 14px 6px 28px;
+    background: var(--danger);
+    color: #fff;
+    border: 1px solid oklch(0.45 0.20 25);
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+  }
+  .estop::before {
+    content: ""; position: absolute;
+    left: 10px; top: 50%; transform: translateY(-50%);
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 2px var(--danger), 0 0 0 3px #fff;
+  }
+
+  /* Main grid */
+  .main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1px;
+    background: var(--line);
+    overflow: hidden;
+  }
+  .pane {
+    background: var(--panel);
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .pane-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel-2);
+    position: sticky; top: 0; z-index: 2;
+  }
+  .pane-head h2 {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  .pane-head .tag {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  /* ===== Parameter panel ===== */
+  .param-body { padding: 4px 0 24px; }
+  .section {
+    border-bottom: 1px solid var(--line-soft);
+    padding: 12px 16px 16px;
+  }
+  .section > h3 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section > h3::before {
+    content: "";
+    width: 4px; height: 12px;
+    background: var(--ink-2);
+    border-radius: 1px;
+  }
+  .field {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+  }
+  .field label {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .input, .select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    transition: border-color .12s, box-shadow .12s;
+  }
+  .input:focus, .select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .input.with-unit {
+    padding-right: 40px;
+  }
+  .input-wrap { position: relative; }
+  .input-wrap .unit {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    pointer-events: none;
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  .conn-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .btn {
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .1s, border-color .1s;
+    letter-spacing: 0.02em;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: #f1f1f0; }
+  .btn:active { background: #e8e8e6; }
+  .btn.primary {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  .btn.primary:hover { background: #000; }
+  .btn.accent {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn.accent:hover { background: oklch(0.55 0.18 245); }
+  .btn.ghost { background: transparent; }
+  .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  .switch {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .switch button {
+    border: 0; background: transparent;
+    padding: 6px 10px;
+    font-size: 11.5px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .switch button + button { border-left: 1px solid var(--line); }
+  .switch button.on {
+    background: var(--ink);
+    color: #fff;
+  }
+
+  /* ===== Movement panel ===== */
+  .move-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--line);
+    padding: 2px;
+    border-radius: 5px;
+  }
+  .move-tabs button {
+    border: 0; background: transparent;
+    padding: 5px 12px;
+    font-size: 11.5px;
+    font-weight: 500;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--ink-2);
+    letter-spacing: 0.02em;
+  }
+  .move-tabs button.on {
+    background: #fff;
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  .move-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1px;
+    background: var(--line);
+    min-height: 0;
+  }
+  .stage {
+    background:
+      radial-gradient(ellipse at 50% 35%, #fefefe 0%, #ececea 65%, #d6d6d3 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .stage-tools {
+    position: absolute;
+    top: 14px; left: 14px;
+    right: 190px;                  /* leave room for axis-info panel */
+    display: flex; gap: 6px;
+    flex-wrap: wrap;
+    z-index: 3;
+  }
+  .stage-tools .badge {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--line);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+  }
+  .stage-tools .badge b { color: var(--ink); font-weight: 600; }
+  .stage-tools .badge .accent { color: var(--accent-ink); font-weight: 600; }
+
+  /* View tools — orbit preset buttons */
+  .view-tools {
+    position: absolute;
+    bottom: 38px;
+    right: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    z-index: 3;
+  }
+  .view-group {
+    display: flex;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    backdrop-filter: blur(6px);
+    box-shadow: var(--shadow);
+  }
+  .view-group button {
+    border: 0;
+    background: transparent;
+    padding: 6px 10px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+  }
+  .view-group button + button { border-left: 1px solid var(--line-soft); }
+  .view-group button:hover { background: var(--panel-2); color: var(--accent-ink); }
+  .view-readout {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.85);
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--line-soft);
+    letter-spacing: 0.04em;
+  }
+  .stage-axisinfo {
+    position: absolute;
+    top: 14px; right: 14px;
+    background: rgba(29,32,36,0.92);
+    color: #f1f2f4;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    z-index: 3;
+    min-width: 160px;
+  }
+  .stage-axisinfo .lbl {
+    font-size: 9.5px; letter-spacing: 0.12em; color: #9aa0a6; text-transform: uppercase;
+  }
+  .stage-axisinfo .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stage-axisinfo .u-suffix { font-size: 11px; color: #9aa0a6; margin-left: 4px; font-weight: 400; }
+  .stage svg { flex: 1; width: 100%; display: block; min-height: 0; touch-action: none; user-select: none; cursor: grab; }
+  .stage svg.dragging { cursor: grabbing; }
+
+  .stage-hint {
+    position: absolute;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.85);
+    border: 1px solid var(--line);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--muted);
+    backdrop-filter: blur(6px);
+    z-index: 3;
+    white-space: nowrap;
+  }
+  .stage-hint kbd {
+    font-family: var(--mono);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    padding: 0 5px;
+    margin: 0 2px;
+    font-size: 10px;
+    color: var(--ink);
+  }
+
+  /* Jog panel */
+  .jog {
+    background: var(--panel);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .axis-card {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 10px 12px;
+    background: #fff;
+    transition: border-color .12s, box-shadow .12s;
+    cursor: pointer;
+  }
+  .axis-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .axis-card .row {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .axis-card .axis-name {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .axis-card .axis-tag {
+    width: 18px; height: 18px;
+    border-radius: 3px;
+    background: var(--ink-2);
+    color: #fff;
+    display: inline-grid; place-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .axis-card.active .axis-tag { background: var(--accent); }
+  .axis-card .axis-pos-wrap { display: flex; flex-direction: column; align-items: flex-end; }
+  .axis-card .axis-pos {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .axis-card .axis-pos .u { color: var(--muted); font-size: 10.5px; margin-left: 2px; }
+  /* Position not yet (re)read while the robot may still be moving */
+  .axis-card .axis-pos.stale, .stage-axisinfo .val.stale { color: var(--muted); font-style: italic; }
+  .axis-card .axis-pos-stamp {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    line-height: 1;
+    margin-top: 2px;
+  }
+  /* Inline target editor inside each axis card */
+  .axis-card .target-row {
+    display: flex; align-items: center;
+    margin-top: 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+    transition: border-color .12s;
+  }
+  .axis-card.active .target-row { border-color: var(--accent); }
+  .axis-card .target-row button {
+    border: 0; background: transparent;
+    padding: 7px 11px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1;
+  }
+  .axis-card .target-row button:hover { background: var(--panel-2); color: var(--accent-ink); }
+  .axis-card .target-row input {
+    flex: 1; min-width: 0;
+    border: 0; background: transparent;
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 4px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .axis-card .target-row input:focus { outline: none; }
+  .axis-card .target-row .u {
+    padding: 0 9px 0 4px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+  .axis-card .target-row.dirty { background: oklch(0.97 0.04 90 / 0.6); }
+  .axis-card .axis-range {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 6px;
+    display: flex; justify-content: space-between;
+    font-variant-numeric: tabular-nums;
+  }
+  .axis-card .meter {
+    margin-top: 8px;
+    height: 4px;
+    background: var(--line-soft);
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+  }
+  .axis-card .meter .fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--ink-2);
+    border-radius: 2px;
+    transition: width .25s ease;
+  }
+  .axis-card.active .meter .fill { background: var(--accent); }
+
+  .jog-topbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .jog-topbar .btn { flex: 1; }
+
+  /* Numeric panel */
+  .num-form {
+    padding: 16px;
+    overflow: auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    align-content: start;
+  }
+  .num-block {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 12px;
+    background: #fff;
+  }
+  .num-block .axis-head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+  }
+  .num-block .axis-name { font-weight: 600; font-size: 14px; }
+  .num-block .axis-name .sub { color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 4px; font-family: var(--mono); }
+  .num-block .current {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .num-block .current b { color: var(--ink); font-weight: 500; }
+  .num-input {
+    display: flex; align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .num-input button {
+    border: 0; background: transparent;
+    padding: 8px 10px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 14px;
+    font-family: var(--mono);
+  }
+  .num-input button:hover { background: var(--panel-2); }
+  .num-input input {
+    flex: 1;
+    border: 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 0;
+    color: var(--ink);
+    width: 100%;
+    background: transparent;
+    font-variant-numeric: tabular-nums;
+  }
+  .num-input input:focus { outline: none; }
+  .num-input .u {
+    padding-right: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+  .num-actions {
+    grid-column: 1 / -1;
+    display: flex; gap: 8px;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 14px;
+    margin-top: 4px;
+  }
+  .num-actions .grow { flex: 1; }
+
+  /* Log */
+  .log {
+    background: #16181b;
+    color: #cfd2d6;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    border-top: 1px solid #0c0e10;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .log-head {
+    padding: 8px 16px;
+    display: flex; gap: 14px; align-items: center;
+    color: #9aa0a6;
+    border-bottom: 1px solid #24272c;
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .log-head .chips { display: flex; gap: 6px; margin-left: auto; }
+  .log-chip {
+    padding: 2px 8px;
+    border: 1px solid #2d3137;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #b1b6bb;
+    font-size: 10px;
+  }
+  .log-chip.on { background: #2a2e33; color: #fff; border-color: #3a3e44; }
+  .log-body {
+    flex: 1;
+    overflow: auto;
+    padding: 6px 16px 10px;
+  }
+  .log-line { display: grid; grid-template-columns: 88px 50px 220px 1fr; gap: 12px; }
+  .log-line .t { color: #6a6f76; }
+  .log-line .tag-mqtt { color: oklch(0.78 0.12 200); }
+  .log-line .tag-api { color: oklch(0.78 0.12 140); }
+  .log-line .tag-evt { color: oklch(0.80 0.12 80); }
+  .log-line .tag-err { color: oklch(0.75 0.18 25); }
+  .log-line .target { color: #8a9098; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-line .msg { color: #e3e5e8; }
+  .log-line .msg .k { color: oklch(0.78 0.10 250); }
+  .log-line .msg .n { color: oklch(0.82 0.10 80); }
+  .log-line .msg .s { color: oklch(0.80 0.12 140); }
+
+  /* --- robot svg styles --- */
+  .robot-axis { transition: opacity .15s; }
+  .robot-axis.dim { opacity: 0.6; }
+  .robot-axis .ax-hit { cursor: grab; }
+  .robot-axis.dragging .ax-hit { cursor: grabbing; }
+
+  .axis-arrow { cursor: pointer; opacity: 0; transition: opacity .12s; }
+  .robot-axis.active .axis-arrow { opacity: 1; }
+  .axis-arrow circle { fill: #fff; stroke: var(--accent); stroke-width: 1.4; }
+  .axis-arrow:hover circle { fill: var(--accent); }
+  .axis-arrow path { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .axis-arrow:hover path { stroke: #fff; }
+
+  .floor-tick { stroke: #b8b9bc; stroke-width: 0.6; }
+  .home-marker { fill: oklch(0.62 0.14 150); }
+  .home-text { font-family: var(--mono); font-size: 7px; fill: #4a4e54; letter-spacing: 0.05em; }
+
+  /* ===== Gear / Get-position buttons on axis card ===== */
+  .axis-card .axis-gear,
+  .axis-card .axis-getpos {
+    border: 1px solid var(--line);
+    background: #fff;
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 1;
+    display: inline-grid; place-items: center;
+    margin-left: 6px;
+    transition: background .1s, color .1s, border-color .1s;
+  }
+  .axis-card .axis-gear:hover,
+  .axis-card .axis-getpos:hover { background: var(--panel-2); color: var(--accent-ink); border-color: var(--accent); }
+  .axis-card .row .right { display: flex; align-items: center; }
+
+  /* ===== Speed / Acc / Step trio ===== */
+  .axis-card .param-trio {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .axis-card .param-trio .pf {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;  /* allow grid item to shrink below content width */
+  }
+  .axis-card .param-trio .pf label {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .axis-card .param-trio .pf input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 3px;
+    padding: 4px 5px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+  }
+  .axis-card .param-trio .pf input::-webkit-outer-spin-button,
+  .axis-card .param-trio .pf input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .axis-card .param-trio .pf input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  .axis-card .card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .axis-card .card-actions button {
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 4px;
+    padding: 6px 4px;
+    font-family: var(--sans);
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--ink-2);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: background .1s, border-color .1s, color .1s;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .axis-card .card-actions button:hover {
+    background: var(--panel-2);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  .axis-card .card-actions button .icon { font-size: 12px; }
+  .axis-card .card-actions .enable-btn.on {
+    background: oklch(0.62 0.14 150 / 0.12);
+    border-color: oklch(0.62 0.14 150);
+    color: oklch(0.42 0.14 150);
+  }
+  .axis-card .card-actions .enable-btn.on:hover {
+    background: oklch(0.62 0.14 150 / 0.20);
+  }
+
+  /* ===== Sequence Move editor (sidebar) ===== */
+  .seq-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--panel-2);
+    position: sticky; top: 41px; z-index: 2;
+  }
+  .seq-toolbar button {
+    flex: 1;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-2);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+    transition: background .1s, border-color .1s;
+  }
+  .seq-toolbar button:hover { background: var(--panel-2); border-color: var(--accent); color: var(--accent-ink); }
+  .seq-toolbar button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .seq-toolbar button.primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seq-toolbar button.danger-text { color: var(--danger); }
+  .seq-toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .seq-list { padding: 10px 12px 20px; }
+  .seq-empty {
+    text-align: center;
+    color: var(--muted);
+    font-size: 11.5px;
+    padding: 20px 12px;
+    font-family: var(--mono);
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+  }
+  .seq-step {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 8px;
+    margin-bottom: 6px;
+    background: #fff;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  .seq-step.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  .seq-step-head {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .seq-num {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    font-weight: 600;
+    text-align: center;
+    background: var(--panel-2);
+    border-radius: 3px;
+    padding: 3px 0;
+  }
+  .seq-motor {
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .seq-motor:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .seq-actions {
+    display: flex;
+    gap: 2px;
+  }
+  .seq-actions button {
+    width: 22px; height: 22px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 3px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+    padding: 0;
+    display: inline-grid; place-items: center;
+    transition: background .1s, color .1s, border-color .1s;
+  }
+  .seq-actions button:hover { background: var(--panel-2); color: var(--accent-ink); border-color: var(--accent); }
+  .seq-actions button.del:hover { color: var(--danger); border-color: var(--danger); background: oklch(0.58 0.20 25 / 0.08); }
+  .seq-actions button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .seq-step-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px;
+  }
+  .seq-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .seq-cell label {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .seq-cell input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 3px;
+    padding: 4px 5px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+  }
+  .seq-cell input::-webkit-outer-spin-button,
+  .seq-cell input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .seq-cell input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+
+  .seq-footer {
+    border-top: 1px solid var(--line-soft);
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+  .seq-footer b { color: var(--ink); font-weight: 600; }
+
+  /* ===== Parameter editor modal ===== */
+  .param-modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 9999;
+  }
+  .param-modal-bg.active { display: flex; }
+  .param-modal {
+    background: #fff;
+    border-radius: 8px;
+    width: min(820px, 92vw);
+    max-height: 88vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .param-modal-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-2);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .param-modal-head h3 {
+    margin: 0;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+  }
+  .param-modal-head .sub {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--muted); margin-left: 8px;
+  }
+  .param-modal-head .x {
+    margin-left: auto;
+    background: transparent; border: 0;
+    color: var(--muted); cursor: pointer;
+    font-size: 20px; line-height: 1; padding: 0 6px;
+  }
+  .param-modal-body {
+    padding: 16px 18px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .param-modal-foot {
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
+    display: flex; gap: 8px; justify-content: flex-end;
+    background: var(--panel-2);
+  }
+  .pgroup { margin-bottom: 16px; }
+  .pgroup > h4 {
+    margin: 0 0 8px;
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pgroup > h4::before {
+    content: ""; width: 4px; height: 12px;
+    background: var(--ink-2); border-radius: 1px;
+  }
+  .pgrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 700px) { .pgrid { grid-template-columns: 1fr 1fr; } }
+  .pfield { display: flex; flex-direction: column; gap: 3px; }
+  .pfield label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-2);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .pfield input, .pfield select {
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .pfield input:focus, .pfield select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .pbtn {
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .pbtn:hover { background: var(--panel-2); }
+  .pbtn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .pbtn.primary:hover { background: #000; }
+  .pbtn.danger-text { color: var(--danger); }
+  .pbtn.danger-text:hover { background: oklch(0.58 0.20 25 / 0.08); }
+  .param-toast {
+    position: fixed; bottom: 20px; right: 20px;
+    padding: 10px 16px;
+    border-radius: 4px;
+    background: var(--ink);
+    color: #fff;
+    font-family: var(--sans);
+    font-size: 12px;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .param-toast.ok { background: oklch(0.55 0.14 150); }
+</style>
+</head>
+<body>
+<!-- Live axis data injected by the FastAPI backend, keyed by UI letter (X/Y/Z/G).
+     Sourced from the `motor` table of the robot_static db resolved via ems_config.db.
+     Empty object when unavailable, in which case the hardcoded defaults below apply. -->
+<script>window.SERVER_AXES = {};</script>
+<div id="root"></div>
+
+<!-- ============== PARAMETER EDITOR MODAL (vanilla, outside React) ============== -->
+<div class="param-modal-bg" id="param-modal">
+  <div class="param-modal">
+    <div class="param-modal-head">
+      <h3 id="pm-title">Axis Parameters</h3>
+      <span class="sub" id="pm-sub"></span>
+      <button class="x" onclick="window.closeAxisParam()">×</button>
+    </div>
+    <div class="param-modal-body" id="pm-body"></div>
+    <div class="param-modal-foot">
+      <button class="pbtn danger-text" onclick="window.resetAxisParamDefaults()">Reset to defaults</button>
+      <span style="flex: 1"></span>
+      <button class="pbtn" onclick="window.closeAxisParam()">Cancel</button>
+      <button class="pbtn primary" onclick="window.saveAxisParam()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============== AXIS PARAMETER STORE (loaded before React) ==============
+(function () {
+  const AXES = ['X', 'Y', 'Z', 'G'];
+  // Display label per UI letter. The motor table uses axis_no 1..4
+  // (axis_no 0 = csos_motor_y_master, unused).
+  const AXIS_LABEL = {
+    X: 'Bridge',
+    Y: 'Long rail',
+    Z: 'Vertical',
+    G: 'Gripper',
+  };
+  // Real per-axis seeds taken verbatim from
+  //   db/csos_beta_robot_static.db · table `motor`
+  // mapped to UI letters as follows:
+  //   X  ← axis_no 2  csos_motor_x  (Bridge,    stroke_max 116,000)
+  //   Y  ← axis_no 1  csos_motor_y  (Long rail, stroke_max  50,000)
+  //   Z  ← axis_no 3  csos_updown   (Vertical,  stroke_max  26,000)
+  //   G  ← axis_no 4  csos_gripper  (Gripper,   stroke_max   7,000)
+  const AXIS_DEFAULTS = {
+    X: { id: 3, no: 3, code: 'csos_motor_x', can_id: 9, axis_no: 2,
+         home_direction: 1, timeout_home: 120, timeout_operation: 60,
+         encoder_ratio: 4, encoder_slip: 16,
+         torque_watch: 0, torque_attempt: 0,
+         ignore_overload: 0, mechanical_stopper: 0,
+         spi_mode: 1, current_run: 5, current_hold: 3,
+         stealth_mode: 1, current_max: 1.5, current_percent: 56.7,
+         stroke_min: 0, stroke_max: 116000,
+         default_position: 0, default_speed: 14000, default_acc: 500,
+         home_speed_fast: 6000, home_speed_slow: 500,
+         force: 4,
+         origin_spd: 14000, origin_acc: 500, origin_pos: 2500,
+         step: 2 },
+    Y: { id: 2, no: 2, code: 'csos_motor_y', can_id: 9, axis_no: 1,
+         home_direction: 0, timeout_home: 120, timeout_operation: 300,
+         encoder_ratio: 4, encoder_slip: 16,
+         torque_watch: 0, torque_attempt: 0,
+         ignore_overload: 0, mechanical_stopper: 0,
+         spi_mode: 3, current_run: 5, current_hold: 3,
+         stealth_mode: 1, current_max: 1.5, current_percent: 56.7,
+         stroke_min: 0, stroke_max: 50000,
+         default_position: 0, default_speed: 2000, default_acc: 500,
+         home_speed_fast: 2000, home_speed_slow: 500,
+         force: 0,
+         origin_spd: 2800, origin_acc: 500, origin_pos: 100,
+         step: 2 },
+    Z: { id: 4, no: 4, code: 'csos_updown', can_id: 9, axis_no: 3,
+         home_direction: 0, timeout_home: 30, timeout_operation: 20,
+         encoder_ratio: 4, encoder_slip: 16,
+         torque_watch: 0, torque_attempt: 0,
+         ignore_overload: 0, mechanical_stopper: 0,
+         spi_mode: 2, current_run: 5, current_hold: 5,
+         stealth_mode: 1, current_max: 1.5, current_percent: 56.7,
+         stroke_min: 0, stroke_max: 26000,
+         default_position: 0, default_speed: 8000, default_acc: 500,
+         home_speed_fast: 6000, home_speed_slow: 1000,
+         force: 4,
+         origin_spd: 12000, origin_acc: 500, origin_pos: 1000,
+         step: 2 },
+    G: { id: 5, no: 5, code: 'csos_gripper', can_id: 9, axis_no: 4,
+         home_direction: 1, timeout_home: 30, timeout_operation: 60,
+         encoder_ratio: 4, encoder_slip: 16,
+         torque_watch: 0, torque_attempt: 0,
+         ignore_overload: 0, mechanical_stopper: 1,
+         spi_mode: 0, current_run: 9, current_hold: 3,
+         stealth_mode: 1, current_max: 0.5, current_percent: 32.2,
+         stroke_min: 0, stroke_max: 7000,
+         default_position: 0, default_speed: 10000, default_acc: 200,
+         home_speed_fast: 2000, home_speed_slow: 500,
+         force: 4,
+         origin_spd: 10000, origin_acc: 500, origin_pos: 1000,
+         step: 2 },
+  };
+  // Override the hardcoded seeds with live DB values injected by the server
+  // (window.SERVER_AXES, keyed by UI letter). Any field present on the row wins;
+  // when SERVER_AXES is empty the defaults above are used unchanged.
+  (function applyServerAxes() {
+    const src = (window.SERVER_AXES && typeof window.SERVER_AXES === 'object') ? window.SERVER_AXES : {};
+    AXES.forEach(a => {
+      const row = src[a];
+      if (!row) return;
+      Object.keys(row).forEach(k => {
+        if (row[k] !== null && row[k] !== undefined) AXIS_DEFAULTS[a][k] = row[k];
+      });
+    });
+  })();
+  // Compatibility shim so other code paths keep working.
+  const AXIS_META = Object.fromEntries(AXES.map(a => [a, {
+    name: AXIS_LABEL[a],
+    code: AXIS_DEFAULTS[a].code,
+    axis_no: AXIS_DEFAULTS[a].axis_no,
+    id: AXIS_DEFAULTS[a].id,
+    no: AXIS_DEFAULTS[a].no,
+    can_id: AXIS_DEFAULTS[a].can_id,
+    stroke_max: AXIS_DEFAULTS[a].stroke_max,
+  }]));
+  function defaultsFor(axis) {
+    return { ...AXIS_DEFAULTS[axis] };
+  }
+  const PARAM_GROUPS = [
+    { title: 'Identity', fields: ['id', 'no', 'code', 'can_id', 'axis_no'] },
+    { title: 'Home / Origin', fields: ['home_direction', 'timeout_home', 'home_speed_fast', 'home_speed_slow', 'origin_spd', 'origin_acc', 'origin_pos'] },
+    { title: 'Encoder', fields: ['encoder_ratio', 'encoder_slip'] },
+    { title: 'Torque & Safety', fields: ['torque_watch', 'torque_attempt', 'ignore_overload', 'mechanical_stopper', 'force'] },
+    { title: 'SPI / Current', fields: ['spi_mode', 'current_run', 'current_hold', 'stealth_mode', 'current_max', 'current_percent'] },
+    { title: 'Stroke', fields: ['stroke_min', 'stroke_max'] },
+    { title: 'Operation Defaults', fields: ['default_position', 'default_speed', 'default_acc', 'timeout_operation', 'step'] },
+  ];
+  const BOOL_FIELDS = new Set(['ignore_overload', 'mechanical_stopper', 'stealth_mode', 'home_direction']);
+  const STRING_FIELDS = new Set(['code']);
+  const STORAGE_KEY = 'robot-axis-params-v2-db';
+
+  function loadAll() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const out = {};
+      AXES.forEach(a => out[a] = { ...defaultsFor(a), ...(saved[a] || {}) });
+      return out;
+    } catch {
+      const out = {};
+      AXES.forEach(a => out[a] = defaultsFor(a));
+      return out;
+    }
+  }
+  function saveAll() { localStorage.setItem(STORAGE_KEY, JSON.stringify(window.AXIS_PARAMS)); }
+
+  window.AXIS_PARAMS = loadAll();
+  window.getAxisParam = (axis, field) => window.AXIS_PARAMS[axis][field];
+  window.setAxisParam = (axis, field, value) => { window.AXIS_PARAMS[axis][field] = value; saveAll(); };
+
+  let editingAxis = null;
+
+  window.openAxisParam = function (axis) {
+    editingAxis = axis;
+    const meta = AXIS_META[axis];
+    const p = window.AXIS_PARAMS[axis];
+    document.getElementById('pm-title').textContent = 'Axis Parameters — ' + meta.name;
+    document.getElementById('pm-sub').textContent = '(' + p.code + ' · axis_no ' + p.axis_no + ')';
+    const body = document.getElementById('pm-body');
+    body.innerHTML = '';
+    PARAM_GROUPS.forEach(g => {
+      const group = document.createElement('div');
+      group.className = 'pgroup';
+      group.innerHTML = '<h4>' + g.title + '</h4>';
+      const grid = document.createElement('div');
+      grid.className = 'pgrid';
+      g.fields.forEach(f => grid.appendChild(makeField(f, p[f])));
+      group.appendChild(grid);
+      body.appendChild(group);
+    });
+    document.getElementById('param-modal').classList.add('active');
+  };
+
+  function makeField(name, value) {
+    const wrap = document.createElement('div');
+    wrap.className = 'pfield';
+    const lab = document.createElement('label');
+    lab.textContent = name;
+    wrap.appendChild(lab);
+    let input;
+    if (BOOL_FIELDS.has(name)) {
+      input = document.createElement('select');
+      ['0', '1'].forEach(v => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        if (String(value) === v) o.selected = true;
+        input.appendChild(o);
+      });
+    } else if (STRING_FIELDS.has(name)) {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.value = value ?? '';
+    } else {
+      input = document.createElement('input');
+      input.type = 'number';
+      input.step = 'any';
+      input.value = value ?? 0;
+    }
+    input.dataset.name = name;
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  window.saveAxisParam = function () {
+    if (!editingAxis) return;
+    document.querySelectorAll('#pm-body [data-name]').forEach(el => {
+      const name = el.dataset.name;
+      let v = el.value;
+      if (BOOL_FIELDS.has(name)) v = parseInt(v);
+      else if (STRING_FIELDS.has(name)) v = String(v);
+      else v = parseFloat(v);
+      window.AXIS_PARAMS[editingAxis][name] = v;
+    });
+    saveAll();
+    paramToast(editingAxis + ' parameters saved', 'ok');
+    window.closeAxisParam();
+    // Refresh inline trio inputs in the card
+    refreshTrio(editingAxis);
+  };
+
+  window.resetAxisParamDefaults = function () {
+    if (!editingAxis) return;
+    if (!confirm('Reset ' + editingAxis + ' to default parameters?')) return;
+    window.AXIS_PARAMS[editingAxis] = defaultsFor(editingAxis);
+    saveAll();
+    window.openAxisParam(editingAxis);  // re-render modal
+    refreshTrio(editingAxis);
+    paramToast(editingAxis + ' reset to defaults', 'ok');
+  };
+
+  window.closeAxisParam = function () {
+    document.getElementById('param-modal').classList.remove('active');
+    editingAxis = null;
+  };
+
+  function refreshTrio(axis) {
+    // Find inline inputs in the matching axis card and update defaultValue / displayed value.
+    const cards = document.querySelectorAll('.axis-card');
+    cards.forEach(card => {
+      const tagEl = card.querySelector('.axis-tag');
+      if (!tagEl || tagEl.textContent.trim() !== axis) return;
+      const inputs = card.querySelectorAll('.param-trio input');
+      if (inputs.length >= 3) {
+        inputs[0].value = window.AXIS_PARAMS[axis].default_speed;
+        inputs[1].value = window.AXIS_PARAMS[axis].default_acc;
+        inputs[2].value = window.AXIS_PARAMS[axis].step;
+      }
+    });
+  }
+
+  document.getElementById('param-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'param-modal') window.closeAxisParam();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') window.closeAxisParam();
+  });
+
+  function paramToast(msg, kind) {
+    const el = document.createElement('div');
+    el.className = 'param-toast ' + (kind || '');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2200);
+  }
+})();
+</script>
+
+<!-- Vendored locally (React 18.3.1, ReactDOM 18.3.1, @babel/standalone 7.29.0) so the
+     page runs fully offline on the unit. Files live in app/static/js/vendor/. -->
+<script src="/static/js/vendor/react.production.min.js"></script>
+<script src="/static/js/vendor/react-dom.production.min.js"></script>
+
+<!-- Precompiled from JSX at build time (no in-browser Babel needed). -->
+<script src="/static/js/robot_control.js"></script>
+</body>
+</html>

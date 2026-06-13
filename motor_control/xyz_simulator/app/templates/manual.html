@@ -1,0 +1,1317 @@
+<html>
+    <head>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <style>
+            .nav-tabs .nav-link:hover {
+                background-color: transparent !important;
+            }
+
+            .border-right-red {
+                border-right: 3px solid red; /* vertical border on the right */
+            }
+
+            .border-right-green {
+                border-right: 3px solid green; /* vertical border on the right */
+            }
+            .small-text {
+                font-size: 0.85rem;  /* smaller text */
+                font-weight: normal; /* remove bold */
+            }
+
+
+            .custom-container {
+                /* display: flex; */
+                flex-wrap: wrap;
+                justify-content: space-between;
+                margin-top: 20px;
+            }
+
+            .input-small {
+                width: 70px;
+            }
+
+            .input-medium {
+                width: 80px
+            }
+
+            .left {
+                flex: 2; /* 1 for Take up equal space on the left */
+                margin-right: 10px; /* Space between left and right */
+            }
+
+            .right {
+                flex: 1; /* 1 for Take up equal space on the right */
+            }
+            .label {
+                font-size: 14px;
+            }
+
+            /* Styles for the modal */
+            .modal {
+                display: none; /* Hidden by default */
+                position: fixed; /* Stay in place */
+                z-index: 1000; /* Sit on top */
+                left: 0;
+                top: 0;
+                width: 100%; /* Full width */
+                height: 100%; /* Full height */
+                overflow: auto; /* Enable scroll if needed */
+                background-color: rgba(0, 0, 0, 0.8); /* Black background with opacity */
+            }
+
+            .modal-content {
+                margin: 15% auto; /* 15% from the top and centered */
+                padding: 20px;
+                border: 1px solid #888;
+                width: 60%; /* Could be more or less, depending on screen size */
+                text-align: center;
+                position: relative;
+            }
+
+            .controls {
+                margin-bottom: 10px;
+            }
+
+            button {
+                margin: 0 5px;
+                padding: 10px 15px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+
+            button:hover {
+                background-color: #0056b3;
+            }
+
+            img {
+                max-width: 100%;
+                transition: transform 0.2s;
+                transform-origin: center;
+                display: block;
+                /* margin: 0 auto; */
+            }
+
+            /* Style for the pixel coordinates display */
+            .topbox {
+                background: #fff;
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 15px;
+            }
+
+            .topbox label { margin-right: 10px; }
+
+            #coordinates {
+                position: absolute;
+                color: white;
+                background-color: rgba(0, 0, 0, 0.5);
+                padding: 5px;
+                border-radius: 5px;
+                display: none; /* Initially hidden */
+            }
+
+            /* for hex builder */
+            .field {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 8px;
+                padding: 10px;
+                background: #fff;
+                border-radius: 6px;
+            }
+
+            .hexBox {
+                padding: 5px 10px;
+                background: #dfdfe0;
+                border-radius: 4px;
+                min-width: 80px;
+                min-height: 20px;
+                text-align: center;
+                color: #000;
+            }
+
+            #output {
+                margin-top: 20px;
+                font-size: 20px;
+                padding: 3px;
+                background: #dfdfe0;
+                width: fit-content;
+                border-radius: 5px;
+                color: #000;
+            }
+
+            .removeBtn, .hexBuildBtn {
+                padding: 5px 15px;
+                background: #0aa;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                color: #000;
+                font-weight: bold;
+            }
+            button:hover { background: #0ff; }
+
+            button.removeBtn {
+                background: #a00;
+                color: #fff;
+            }
+            .removeBtn:hover { background: #f00; }
+        </style>
+    </head>
+    <body>
+        <div class="container-fluid custom-container">
+            <div class="row mb-4">
+                <div class="col">
+                    <h3 id="h3-title">Motors Control for CSOS - <span id="h3-title-span" style="font-size: 0.8em;"></span> </h3> 
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <ul class="nav nav-tabs" id="myTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="true">Parameter Settings from DB</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="movement-absolute-tab" data-bs-toggle="tab" data-bs-target="#movement-absolute" type="button" role="tab" aria-controls="movement-absolute" aria-selected="false">Absolute Movement</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="movement-relative-tab" data-bs-toggle="tab" data-bs-target="#movement-relative" type="button" role="tab" aria-controls="movement-relative" aria-selected="false">Relative Movement</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="error-code-tab" data-bs-toggle="tab" data-bs-target="#errorcode" type="button" role="tab" aria-controls="errorcode" aria-selected="false">Error Codes</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="port-map-tab" data-bs-toggle="tab" data-bs-target="#portmap" type="button" role="tab" aria-controls="portmap" aria-selected="false">Port Map</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="camera-control-tab" data-bs-toggle="tab" data-bs-target="#cameracontrol" type="button" role="tab" aria-controls="cameracontrol" aria-selected="false">Control</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="hex-builder-tab" data-bs-toggle="tab" data-bs-target="#hexbuilder" type="button" role="tab" aria-controls="hexbuilder" aria-selected="false">Hex Builder</button>
+                        </li>
+                    </ul>
+
+
+                    <div class="tab-content" id="myTabContent">
+                        <!-- Settings -->
+                        <div class="tab-pane fade show active" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="row mt-4 ms-4 me-4">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <div class="controls">
+                                                    <button class="btn btn-danger" onclick="stop_motors()">STOP MOTORS</button>
+                                                    <button class="btn btn-danger" onclick="emergency_reset()">EMERGENCY</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-12 col-12">
+                                    <div class="controls table-responsive">
+                                        <div class="row mt-4 ms-4 me-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <table class="table table-bordered table-hover mt-4">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Axis</th>
+                                                                <th>Motor Code</th>
+                                                                <th>Resolution</th>
+                                                                <th>Stealth Mode</th>
+                                                                <th>Home Direction</th>
+                                                                <th>Run Current</th>
+                                                                <th>Hold Current</th>
+                                                                <th>Torque Mode</th>
+                                                                <th>Encoder Slip</th>
+                                                                <th>Load and Set</th>
+                                                                <th>Result</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td class="label">2</td>
+                                                                <td class="label">Motor X</td>
+                                                                <td><input class="form-control form-control-sm input-small" id="resolution-x" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="stealth-x" type="text" ></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="home-direction-x" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="run-current-x" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="hold-current-x" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="torque-mode-x" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="encoder-slip-x" type="text"></td>
+                                                                <td>
+                                                                    <div class="d-flex gap-2">
+                                                                        <button class="btn btn-primary btn-sm" onclick="loadMotorData('X')">Load from DB</button>
+                                                                        <button class="btn btn-primary btn-sm" onclick="setMotorData('X', 'initial-result')">Set Parameters</button>
+                                                                    </div>
+                                                                </td>
+                                                                <td class="label" id="initial-result-x">Ready</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td class="label">1</td>
+                                                                <td class="label">Motor Y</td>
+                                                                <td><input class="form-control form-control-sm input-small" id="resolution-y" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="stealth-y" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="home-direction-y" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="run-current-y" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="hold-current-y" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="torque-mode-y" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="encoder-slip-y" type="text"></td>
+                                                                <td>
+                                                                    <div class="d-flex gap-2">
+                                                                        <button class="btn btn-primary btn-sm" onclick="loadMotorData('Y')">Load from DB</button>
+                                                                        <button class="btn btn-primary btn-sm" onclick="setMotorData('Y', 'initial-result')">Set Parameters</button>
+                                                                    </div>
+                                                                </td>
+                                                                <td class="label" id="initial-result-y">Ready</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td class="label">3</td>
+                                                                <td class="label">Motor-Z</td>
+                                                                <td><input class="form-control form-control-sm input-small" id="resolution-z" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="stealth-z" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="home-direction-z" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="run-current-z" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="hold-current-z" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="torque-mode-z" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="encoder-slip-z" type="text"></td>
+                                                                <td>
+                                                                    <div class="d-flex gap-2">
+                                                                        <button class="btn btn-primary btn-sm" onclick="loadMotorData('Z')">Load from DB</button>
+                                                                        <button class="btn btn-primary btn-sm" onclick="setMotorData('Z', 'initial-result')">Set Parameters</button>
+                                                                    </div>
+                                                                </td>
+                                                                <td class="label" id="initial-result-z">Ready</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td class="label">4</td>
+                                                                <td class="label">Gripper</td>
+                                                                <td><input class="form-control form-control-sm input-small" id="resolution-g" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="stealth-g" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="home-direction-g" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="run-current-g" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="hold-current-g" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="torque-mode-g" type="text"></td>
+                                                                <td><input class="form-control form-control-sm input-small" id="encoder-slip-g" type="text"></td>
+                                                                <td>
+                                                                    <div class="d-flex gap-2">
+                                                                        <button class="btn btn-primary btn-sm" onclick="loadMotorData('G')">Load from DB</button>
+                                                                        <button class="btn btn-primary btn-sm" onclick="setMotorData('G', 'initial-result')">Set Parameters</button>
+                                                                    </div>
+                                                                </td>
+                                                                <td class="label" id="initial-result-g">Ready</td>
+                                                            </tr>
+                                                            
+                                                            
+                                                        </tbody>
+                                                    </table>
+
+                                                    <!-- <h6 style="color: red;">Run those motors in this strict order (from top to bottom)</h6> -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Absolute Movement -->
+                        <div class="tab-pane fade" id="movement-absolute" role="tabpanel" aria-labelledby="movement-absolute-tab">
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="row mt-4 ms-4 me-4">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <div class="controls">
+                                                    <button class="btn btn-danger" onclick="stop_motors()">STOP MOTORS</button>
+                                                    <button class="btn btn-danger" onclick="emergency_reset()">EMERGENCY</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mt-2 ms-4 me-4">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-9 col-12">
+                                            <div class="controls table-responsive">
+                                                <table class="table table-bordered table-hover mt-4">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Axis</th>
+                                                            <th>Motor Code</th>
+                                                            <th>Current Pulse</th>
+                                                            <th>Motor Ratio</th>
+                                                            <th>Offset (Micron)</th>
+                                                            <th>Set Target</th>
+                                                            <th>Target Pulse</th>
+                                                            <th>Speed/Acc</th>
+                                                            <th>Absolute Move</th>
+                                                            <th>Result</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="label">2</td>
+                                                            <td class="label">Motor X</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-pulse-x" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('X', 'abs-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="abs-ratio-x" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-offset-x" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetPulse('X', 'abs', 'abs-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-target-x" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-speed-x" type="text" placeholder="speed"> 
+                                                                    <input class="form-control form-control-sm input-small" id="abs-acc-x" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="execMotor('X', 'abs-result')">Move</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="forceMotor('X', 'abs-result')">Force</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="abs-result-x">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">1</td>
+                                                            <td class="label">Motor Y</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-pulse-y" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('Y', 'abs-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="abs-ratio-y" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-offset-y" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetPulse('Y', 'abs', 'abs-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-target-y" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-speed-y" type="text" placeholder="speed">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-acc-y" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="execMotor('Y', 'abs-result')">Move</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="forceMotor('Y', 'abs-result')">Force</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="abs-result-y">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">3</td>
+                                                            <td class="label">Motor Z</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-pulse-z" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('Z', 'abs-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="abs-ratio-z" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-offset-z" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetPulse('Z', 'abs', 'abs-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-target-z" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-speed-z" type="text" placeholder="speed">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-acc-z" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="execMotor('Z', 'abs-result')">Move</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="forceMotor('Z', 'abs-result')">Force</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="abs-result-z">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">4</td>
+                                                            <td class="label">Motor G</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-pulse-g" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('G', 'abs-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="abs-ratio-g" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-offset-g" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetPulse('G', 'abs', 'abs-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="abs-target-g" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-speed-g" type="text" placeholder="speed">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-acc-g" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="execMotor('G', 'cw', 'abs-result')">Move</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="forceMotor('G', 'ccw', 'abs-result')">Force</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="abs-result-g">Ready</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 col-12">
+                                            <div class="liveview image-container">
+                                                <h5>Live View</h5>
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" role="switch" id="live_view_toggle_absolute" onchange="toggleLiveView('absolute')">
+                                                    <label class="form-check-label" for="flexSwitchCheckDefault" style="font-size: 0.9rem;">Enable Live View</label>
+                                                </div>
+                                                <img class="mt-1" id="liveview-image" alt="Liveview" style="width: 300px; height:200px; display: none;">
+                                                
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mt-2 ms-4 me-4">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-9">
+                                            <div class="controls">
+                                                <table class="table table-bordered table-hover mt-4">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Axis</th>
+                                                            <th>Motor Code</th>
+                                                            <th>Active</th>
+                                                            <th>Encoder</th>
+                                                            <th>Error Reset</th>
+                                                            <th>Torque</th>
+                                                            <th>Home</th>
+                                                            <th>Origin</th>
+                                                            <th>Result</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="label">2</td>
+                                                            <td class="label">Motor X</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-power-btn-x" onclick="toggleActive('X', 'abs-power-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-encoder-btn-x" onclick="toggleEncoder('X', 'abs-encoder-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-reset-btn-x" onclick="execReset('X', 'abs-reset-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-torque-x" type="text" placeholder="slip" disabled> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-percent-x" type="text" placeholder="percent" disabled> &nbsp;
+                                                                    <button class="btn btn-secondary btn-sm" id="abs-torque-btn-x" onclick="controlTorque('X', 'abs', 'abs-result-setting')" disabled>Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-home-btn-x" onclick="homeMotor('X', 'abs-home-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-origin-btn-x" onclick="originMotor('X', 'abs-origin-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td class="label" id="abs-result-setting-x">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">1</td>
+                                                            <td class="label">Motor Y</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-power-btn-y" onclick="toggleActive('Y', 'abs-power-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-encoder-btn-y" onclick="toggleEncoder('Y', 'abs-encoder-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-reset-btn-y" onclick="execReset('Y', 'abs-reset-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-torque-y" type="text" placeholder="slip"> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-percent-y" type="text" placeholder="percent"> &nbsp;
+                                                                    <button class="btn btn-primary btn-sm" id="abs-torque-btn-y" onclick="controlTorque('Y', 'abs', 'abs-result-setting')">Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-home-btn-y" onclick="homeMotor('Y', 'abs-home-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-origin-btn-y" onclick="originMotor('Y', 'abs-origin-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td class="label" id="abs-result-setting-y">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">3</td>
+                                                            <td class="label">Motor Z</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-power-btn-z" onclick="toggleActive('Z', 'abs-power-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-encoder-btn-z" onclick="toggleEncoder('Z', 'abs-encoder-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-reset-btn-z" onclick="execReset('Z', 'abs-reset-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-torque-z" type="text" placeholder="slip"> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-percent-z" type="text" placeholder="percent"> &nbsp;
+                                                                    <button class="btn btn-primary btn-sm" id="abs-torque-btn-z" onclick="controlTorque('Z', 'abs', 'abs-result-setting')">Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-home-btn-z" onclick="homeMotor('Z', 'abs-home-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-origin-btn-z" onclick="originMotor('Z', 'abs-origin-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td class="label" id="abs-result-setting-z">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">4</td>
+                                                            <td class="label">Motor G</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-power-btn-g" onclick="toggleActive('G', 'abs-power-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-encoder-btn-g" onclick="toggleEncoder('G', 'abs-encoder-btn', 'abs-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-reset-btn-g" onclick="execReset('G', 'abs-reset-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="abs-torque-g" type="text" placeholder="slip"> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="abs-percent-g" type="text" placeholder="percent"> &nbsp;
+                                                                    <button class="btn btn-primary btn-sm" id="abs-torque-btn-g" onclick="controlTorque('G', 'abs', 'abs-result-setting')">Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-home-btn-g" onclick="homeMotor('G', 'abs-home-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="abs-origin-btn-g" onclick="originMotor('G', 'abs-origin-btn', 'abs-result-setting')">Exec</button></td>
+                                                            <td class="label" id="abs-result-setting-g">Ready</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-3 col-12">
+                                            <div class="image-container mt-2" id="image-container-absolute">
+                                                <h5>Snapshot Image</h5>
+                                                <img id="thumbnail-image" alt="Thumbnail Image" onclick="openModal()" style="width: 300px; height:200px;display: none;">
+                                                <span class="form-check-label" id="model-label-absolute" style="font-size: 0.9rem;display: none;">
+                                                    <i>* Click to see the image in a model</i>
+                                                </span>
+                                                <br>
+                                                <button class="btn btn-primary" onclick="snapImage('absolute')" style="margin-top: 5px; width: 200px;">Snap Image</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- The Modal -->
+                                <div id="imageModal" class="modal">
+                                    <div class="modal-content">
+                                        <span onclick="closeModal()" style="cursor:pointer; float:right; font-size:30px; color:white;">&times;</span>
+                                        <h5>Image box that user can zoom in/out</h5>
+                                        <img id="snapshot-image" alt="Zoom Image" 
+                                            onmousemove="showCoordinates(event)" onmouseout="hideCoordinates()"
+                                            onwheel="zoomImage(event)">
+                                        <div id="coordinates"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        
+                        </div>
+
+                        <!-- Relative Movement -->
+                        <div class="tab-pane fade" id="movement-relative" role="tabpanel" aria-labelledby="movement-relative-tab">
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="row mt-4 ms-4 me-4">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <div class="controls">
+                                                    <button class="btn btn-danger" onclick="stop_motors()">STOP MOTORS</button>
+                                                    <button class="btn btn-danger" onclick="emergency_reset()">EMERGENCY</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mt-2 ms-4 me-4">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-9 col-12">
+                                            <div class="controls table-responsive">
+                                                <table class="table table-bordered table-hover mt-4">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Axis</th>
+                                                            <th>Motor Code</th>
+                                                            <th>Current Pulse</th>
+                                                            <th>Motor Ratio</th>
+                                                            <th>Offset (Micron)</th>
+                                                            <th>Set Distance</th>
+                                                            <th>Distance</th>
+                                                            <th>Speed/Acc</th>
+                                                            <th>Relative Move <br><span class="small-text">(Force Movement)</span></th>
+                                                            <th>Result</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="label">2</td>
+                                                            <td class="label">Motor X</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-pulse-x" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('X', 'rel-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="rel-ratio-x" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-offset-x" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetDistance('X', 'rel', 'rel-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-target-x" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-speed-x" type="text" placeholder="speed"> 
+                                                                    <input class="form-control form-control-sm input-small" id="rel-acc-x" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('X', 'cw', 'rel-result')">CW</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('X', 'ccw', 'rel-result')">CCW</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="rel-result-x">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">1</td>
+                                                            <td class="label">Motor Y</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-pulse-y" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('Y', 'rel-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="rel-ratio-y" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-offset-y" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetDistance('Y', 'rel', 'rel-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-target-y" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-speed-y" type="text" placeholder="speed">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-acc-y" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('Y', 'cw', 'rel-result')">CW</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('Y', 'ccw', 'rel-result')">CCW</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="rel-result-y">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">3</td>
+                                                            <td class="label">Motor Z</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-pulse-z" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('Z', 'rel-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="rel-ratio-z" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-offset-z" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetDistance('Z', 'rel', 'rel-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-target-z" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-speed-z" type="text" placeholder="speed">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-acc-z" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('Z', 'cw', 'rel-result')">CW</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('Z', 'ccw', 'rel-result')">CCW</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="rel-result-z">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">4</td>
+                                                            <td class="label">Motor G</td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-pulse-g" type="text">
+                                                                    <button class="btn btn-primary btn-sm" onclick="getMotorData('G', 'rel-pulse')">Get</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><input class="form-control form-control-sm input-small" id="rel-ratio-g" type="text" value="1.5"></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-offset-g" type="text" value="-100"></td>
+                                                            <td><button class="btn btn-primary btn-sm" onclick="setTargetDistance('G', 'rel', 'rel-result')">Exec</button></td>
+                                                            <td><input class="form-control form-control-sm input-medium" id="rel-target-g" type="text" value="10"></td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-speed-g" type="text" placeholder="speed">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-acc-g" type="text" placeholder="acc">
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex gap-2">
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('G', 'cw', 'rel-result')">CW</button>
+                                                                    <button class="btn btn-primary btn-sm" onclick="relativeForceMotor('G', 'ccw', 'rel-result')">CCW</button>
+                                                                </div>
+                                                            </td>
+                                                            <td class="label" id="rel-result-g">Ready</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-3 col-12">
+                                            <div class="liveview image-container">
+                                                <h5>Live View</h5>
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" role="switch" id="live_view_toggle_relative" onchange="toggleLiveView('relative')">
+                                                    <label class="form-check-label" for="flexSwitchCheckDefault" style="font-size: 0.9rem;">Enable Live View</label>
+                                                </div>
+                                                <img class="mt-1" id="liveview-image-2" alt="Liveview" style="width: 300px; height:200px; display: none;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div> 
+                            
+                            <div class="card mt-2 ms-4 me-4">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-9 col-12">
+                                            <div class="controls">
+                                                <table class="table table-bordered table-hover mt-4">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Axis</th>
+                                                            <th>Motor Code</th>
+                                                            <th>Active</th>
+                                                            <th>Encoder</th>
+                                                            <th>Error Reset</th>
+                                                            <th>Torque</th>
+                                                            <th>Home</th>
+                                                            <th>Origin</th>
+                                                            <th>Result</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="label">2</td>
+                                                            <td class="label">Motor X</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-power-btn-x" onclick="toggleActive('X', 'rel-power-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-encoder-btn-x" onclick="toggleEncoder('X', 'rel-encoder-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-reset-btn-x" onclick="execReset('X', 'rel-reset-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-torque-x" type="text" placeholder="slip" disabled> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-percent-x" type="text" placeholder="percent" disabled> &nbsp;
+                                                                    <button class="btn btn-secondary btn-sm" id="rel-torque-btn-x" onclick="controlTorque('X', 'rel', 'rel-result-setting')" disabled>Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-home-btn-x" onclick="homeMotor('X', 'rel-home-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-origin-btn-x" onclick="originMotor('X', 'abs-origin-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td class="label" id="rel-result-setting-x">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">1</td>
+                                                            <td class="label">Motor Y</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-power-btn-y" onclick="toggleActive('Y', 'rel-power-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-encoder-btn-y" onclick="toggleEncoder('Y', 'rel-encoder-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-reset-btn-y" onclick="execReset('Y', 'rel-reset-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-torque-y" type="text" placeholder="slip"> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-percent-y" type="text" placeholder="percent"> &nbsp;
+                                                                    <button class="btn btn-primary btn-sm" id="rel-torque-btn-y" onclick="controlTorque('Y', 'rel', 'rel-result-setting')">Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-home-btn-y" onclick="homeMotor('Y', 'rel-home-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-origin-btn-y" onclick="originMotor('Y', 'abs-origin-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td class="label" id="rel-result-setting-y">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">3</td>
+                                                            <td class="label">Motor Z</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-power-btn-z" onclick="toggleActive('Z', 'rel-power-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-encoder-btn-z" onclick="toggleEncoder('Z', 'rel-encoder-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-reset-btn-z" onclick="execReset('Z', 'rel-reset-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-torque-z" type="text" placeholder="slip"> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-percent-z" type="text" placeholder="percent"> &nbsp;
+                                                                    <button class="btn btn-primary btn-sm" id="rel-torque-btn-z" onclick="controlTorque('Z', 'rel', 'rel-result-setting')">Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-home-btn-z" onclick="homeMotor('Z', 'rel-home-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-origin-btn-z" onclick="originMotor('Z', 'abs-origin-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td class="label" id="rel-result-setting-z">Ready</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">4</td>
+                                                            <td class="label">Motor G</td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-power-btn-g" onclick="toggleActive('G', 'rel-power-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-encoder-btn-g" onclick="toggleEncoder('G', 'rel-encoder-btn', 'rel-result-setting')">Disable</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-reset-btn-g" onclick="execReset('G', 'rel-reset-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td>
+                                                                <div style="display: flex; align-items: center;">
+                                                                    <input class="form-control form-control-sm input-small" id="rel-torque-g" type="text" placeholder="slip"> &nbsp;
+                                                                    <input class="form-control form-control-sm input-medium" id="rel-percent-g" type="text" placeholder="percent"> &nbsp;
+                                                                    <button class="btn btn-primary btn-sm" id="rel-torque-btn-g" onclick="controlTorque('G', 'rel', 'rel-result-setting')">Enable</button>
+                                                                </div>
+                                                            </td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-home-btn-g" id="rel-home-btn-g" onclick="homeMotor('G', 'rel-home-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td><button class="btn btn-primary btn-sm" id="rel-origin-btn-g" onclick="originMotor('G', 'abs-origin-btn', 'rel-result-setting')">Exec</button></td>
+                                                            <td class="label" id="rel-result-setting-g">Ready</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-3 col-12">
+                                            <div class="image-container mt-2" id="image-container-relative">
+                                                <h5>Snapshot Image</h5>
+                                                <img id="thumbnail-image-2" alt="Thumbnail Image" onclick="openModal2()" style="width: 300px; height:200px;display: none;">
+                                                <span class="form-check-label" style="font-size: 0.9rem;display: none;" id="model-label-relative">
+                                                    <i>* Click to see the image in a model</i>
+                                                </span>
+                                                <br>
+                                                <button class="btn btn-primary" onclick="snapImage('relative')" style="margin-top: 5px; width: 200px;">Snap Image</button>
+                                            </div>
+
+                                            <!-- The Modal -->
+                                            <div id="imageModal2" class="modal">
+                                                <div class="modal-content">
+                                                    <span onclick="closeModal2()" style="cursor:pointer; float:right; font-size:30px; color:white;">&times;</span>
+                                                    <h5>Image box that user can zoom in/out</h5>
+                                                    <img id="snapshot-image-2" alt="Zoom Image" 
+                                                        onmousemove="showCoordinates(event)" onmouseout="hideCoordinates()"
+                                                        onwheel="zoomImage(event)">
+                                                    <div id="coordinates"></div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Error Codes -->
+                        <div class="tab-pane fade" id="errorcode" role="tabpanel" aria-labelledby="error-code-tab">
+                            <div class="card mt-4 ms-4 me-4">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <h5>Error Codes</h5>
+                                            <p>The following table lists the error codes that may be encountered during motor operation. Each code corresponds to a specific issue that needs to be addressed.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4 col-4">
+                                            <div class="controls table-responsive">
+                                                <table class="table table-bordered table-hover mt-4">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>No</th>
+                                                            <th>Code</th>
+                                                            <th>Description</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="label">1</td>
+                                                            <td class="label">0x01</td>
+                                                            <td class="label">Lower Limit</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">2</td>
+                                                            <td class="label">0x02</td>
+                                                            <td class="label">Upper Limit</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">3</td>
+                                                            <td class="label">0x03</td>
+                                                            <td class="label">Motor driver error</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">4</td>
+                                                            <td class="label">0x04</td>
+                                                            <td class="label">CAN communication failed</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">5</td>
+                                                            <td class="label">0x05</td>
+                                                            <td class="label">Position encoding error</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">6</td>
+                                                            <td class="label">0x06</td>
+                                                            <td class="label">Home sensor error</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">7</td>
+                                                            <td class="label">0x07</td>
+                                                            <td class="label">Motor overload</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">8</td>
+                                                            <td class="label">0x08</td>
+                                                            <td class="label">Position reach limit (In torque mode, motor reaches the target position)</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">9</td>
+                                                            <td class="label">0x09</td>
+                                                            <td class="label">SPI driver supply voltage low</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">10</td>
+                                                            <td class="label">0x0A</td>
+                                                            <td class="label">SPI driver supply voltage high</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">11</td>
+                                                            <td class="label">0x0B</td>
+                                                            <td class="label">SPI driver temperature high</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">12</td>
+                                                            <td class="label">0x0C</td>
+                                                            <td class="label">SPI driver overheat</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">13</td>
+                                                            <td class="label">0x0D</td>
+                                                            <td class="label">SPI driver overvoltage</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">14</td>
+                                                            <td class="label">0x0E</td>
+                                                            <td class="label">SPI driver overcurrent</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">15</td>
+                                                            <td class="label">0x0F</td>
+                                                            <td class="label">SPI driver command execute disable</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-4 col-4">
+                                            <div class="controls table-responsive">
+                                                <table class="table table-bordered table-hover mt-4">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>No</th>
+                                                            <th>Code</th>
+                                                            <th>Description</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="label">16</td>
+                                                            <td class="label">0x10</td>
+                                                            <td class="label">SPI driver EEPROM error</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">17</td>
+                                                            <td class="label">0x11</td>
+                                                            <td class="label">Driver parameters setting failed</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">18</td>
+                                                            <td class="label">0x12</td>
+                                                            <td class="label">Rotation stroke over run</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">19</td>
+                                                            <td class="label">0x13</td>
+                                                            <td class="label">EEPROW read/write error</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">20</td>
+                                                            <td class="label">0x14</td>
+                                                            <td class="label">Encoder not response</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">21</td>
+                                                            <td class="label">0x15</td>
+                                                            <td class="label">Encoder error on homing</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">22</td>
+                                                            <td class="label">0x16</td>
+                                                            <td class="label">Home time-out</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">23</td>
+                                                            <td class="label">0xC1</td>
+                                                            <td class="label">Motor is busy</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">24</td>
+                                                            <td class="label">0xC2</td>
+                                                            <td class="label">Motor parameters not set or Homing command was not executed</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">25</td>
+                                                            <td class="label">0xC3</td>
+                                                            <td class="label">Motor position is at the limit of the requested move direction</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">26</td>
+                                                            <td class="label">0xC4</td>
+                                                            <td class="label">Out of resources for specified speed and acceleration time</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">27</td>
+                                                            <td class="label">0xC5</td>
+                                                            <td class="label">Invalid speed command</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">28</td>
+                                                            <td class="label">0xC7</td>
+                                                            <td class="label">No valid position saved in NVM or HOming command was not executed</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">29</td>
+                                                            <td class="label">0xC8</td>
+                                                            <td class="label">Earthquake in progress</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">30</td>
+                                                            <td class="label">0x41</td>
+                                                            <td class="label">CAN_FD_ERROR_TX_RX_WARNING_STATE</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-4 col-4">
+                                            <div class="controls table-responsive">
+                                                <table class="table table-bordered table-hover mt-4">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>No</th>
+                                                            <th>Code</th>
+                                                            <th>Description</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="label">31</td>
+                                                            <td class="label">0x42</td>
+                                                            <td class="label">CANFD_ERROR_RX_WARNING_STATE</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">32</td>
+                                                            <td class="label">0x44</td>
+                                                            <td class="label">CANFD_ERROR_TX_WARNING_STATE</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">33</td>
+                                                            <td class="label">0x48</td>
+                                                            <td class="label">CANFD_ERROR_RX_BUS_PASSIVE_STATE</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">34</td>
+                                                            <td class="label">0x50</td>
+                                                            <td class="label">CANFD_ERROR_TX_BUS_PASSIVE_STATE</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="label">35</td>
+                                                            <td class="label">0x60</td>
+                                                            <td class="label">CANFD_ERROR_TX_BUS_OFF_STATE</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>       
+                                </div>
+                            </div>                   
+                        </div>
+
+                        <!-- Port Map -->
+                        <div class="tab-pane fade" id="portmap" role="tabpanel" aria-labelledby="port-map-tab">
+                             <div class="row">
+                                <div class="col-md-2 col-2 mt-4 ms-4">
+                                    <div class="card" style="width: 14rem;">
+                                        <div class="card-body">
+                                            <h5 class="card-title">SMU View</h5>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="flexRadioDefault" id="simplexRadio">
+                                                <label class="form-check-label" for="simplexRadio">
+                                                    Simplex
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="flexRadioDefault" id="duplexRadio" checked>
+                                                <label class="form-check-label" for="duplexRadio">
+                                                    Duplex
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+    
+                                <div class="col-md-2 col-2 mt-4 ms-4">
+                                    <div class="card" style="width: 14rem;">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Port View</h5>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="flexRadioDefault" id="simplexRadioPort">
+                                                <label class="form-check-label" for="simplexRadioPort">
+                                                    Simplex
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="flexRadioDefault" id="duplexRadioPort">
+                                                <label class="form-check-label" for="duplexRadioPort">
+                                                    Duplex
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>  
+                            <div class="row mt-4 ms-4 me-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <img id="portMapImage" src="/static/img/duplex_smu_view.png" alt="Port Map" style="width: 90%; height:auto;">
+                                    </div>
+                                </div>
+                            </div>                        
+                        </div>
+
+                        <!-- Controls -->
+                        <div class="tab-pane fade" id="cameracontrol" role="tabpanel" aria-labelledby="camera-control-tab">
+                             <div class="row">
+                                <div class="col-md-4 col-4 mt-4 ms-4">
+                                    <div class="card" >
+                                        <div class="card-body">
+                                            <h5 class="card-title mb-4">Camera Control</h5>
+                                            <button class="btn btn-primary" onclick="startCamera()" style="width: 120px; margin-bottom: 10px;">Start Camera</button>
+                                            <button class="btn btn-danger" onclick="stopCamera()" style="width: 120px; margin-bottom: 10px;">Stop Camera</button>
+                                            <label id="camera-control-result">Result</label>
+                                            <br><label class="mt-4" style="font-size: 0.9rem;"><i>* Refresh to see the update</i></label>
+                                            
+                                            <hr class="mt-4">
+
+                                            <div class="image-container mt-4">
+                                                <h5>Live View</h5>
+                                                 <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" role="switch" id="live_view_toggle_control" onchange="toggleLiveView('control')">
+                                                    <label class="form-check-label" for="flexSwitchCheckDefault" style="font-size: 0.9rem;">Enable Live View</label>
+                                                </div>
+                                                <img class="mt-1" id="camera-control-image" alt="Thumbnail Image" style="width: 300px; height:200px; display: none;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+    
+                                <div class="col-md-4 col-4 mt-4 ms-4">
+                                    <div class="card" style="border: 1px solid #9c1212;">
+                                        <div class="card-body">
+                                            <h5 class="card-title mb-4">Model Control (Simplex or Duplex)</h5>
+                                            <button class="btn btn-danger" onclick="changeModel('simplex')" style="width: 120px; margin-bottom: 10px;">To Simplex</button>
+                                            <button class="btn btn-danger" onclick="changeModel('duplex')" style="width: 120px; margin-bottom: 10px;">To Duplex</button>
+                                            <label id="model-control-result">Result</label>
+                                            <br><label class="mt-4" style="font-size: 0.9rem;"><i>* Change the model of the CSOS (for EMS UI and Port mapping)</i></label>
+                                            <br><label class="mt-1" style="font-size: 0.9rem;"><i>* Do not run if not needed</i></label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>  
+                        </div>
+
+                        <!-- Hex Builder -->
+                        <div class="tab-pane fade show" id="hexbuilder" role="tabpanel" aria-labelledby="hex-builder-tab">
+                            <div class="row">
+                                <div class="col-md-12 col-12">
+                                    <div class="controls table-responsive">
+                                        <div class="row mt-4 ms-4 me-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                   <div class="row mb-3">
+                                                        <div class="col-auto topbox d-flex align-items-end gap-3 p-2">
+
+                                                            <div class="d-flex flex-column">
+                                                                <label class="form-label mb-1">CAN Interface:</label>
+                                                                <select class="form-select w-auto" id="canIf" onchange="update()">
+                                                                    <option value="can0">can0</option>
+                                                                    <option value="can1">can1</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="d-flex flex-column">
+                                                                <label class="form-label mb-1">CAN Address (hex):</label>
+                                                                <select class="form-select w-auto" id="canAddress" onchange="update()">
+                                                                    <option value="009">009</option>
+                                                                    <option value="00B">00B</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <hr>
+
+                                                    <div class="row">
+                                                            
+                                                            <!-- LEFT COLUMN -->
+                                                            <div class="col-md-7" id="leftCol">
+                                                                <button class="hexBuildBtn btn btn-primary mb-3" onclick="addField()">
+                                                                    + Add Field
+                                                                </button>
+                                                                <div id="fields"></div>
+                                                            </div>
+
+                                                            <!-- RIGHT COLUMN -->
+                                                            <div class="col-md-5" id="rightCol">
+                                                                <h4>Final Command:</h4>
+                                                                <div id="output">
+                                                                    cansend can0 000#
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+        <script>
+            const VERSION = "{{ version }}";
+            const EMS_VERSION = "{{ ems_version }}";
+            const SERVER_IP = "{{ server_ip }}";
+            const SENDSTREAM_URL = `http://${SERVER_IP}/sendstream`;
+            const SNAPSHOT_URL = `http://${SERVER_IP}/snapshot`;
+
+            let BASE_URL;
+            if(EMS_VERSION == "4"){
+                BASE_URL = `http://${SERVER_IP}:5001/motor_service/v1/gen2`;
+            }
+            else{
+                BASE_URL = `http://${SERVER_IP}/api/ems/motor_service/v1/gen2`;
+            }
+
+            const CAMERA_CONTROL_URL = `http://${SERVER_IP}:5001`;
+            const CHANGE_MODEL_URL_SIMPLEX = `http://${SERVER_IP}/v1/robot-management/models/4/change`;
+            const CHANGE_MODEL_URL_DUPLEX = `http://${SERVER_IP}/v1/robot-management/models/5/change`;
+        </script>
+        <script src="/static/js/main.js"></script>
+        <script src="/static/js/hex_builder.js"></script>
+</body>
+</html>
