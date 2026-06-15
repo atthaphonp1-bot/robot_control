@@ -46,6 +46,10 @@
     grid-template-rows: 52px 1fr 180px;
     height: 100vh;
     min-height: 720px;
+    transition: grid-template-rows .15s ease;
+  }
+  .app.telemetry-collapsed {
+    grid-template-rows: 52px 1fr 37px;
   }
   /* Top bar */
   .topbar {
@@ -310,11 +314,22 @@
   .move-body {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 1px;
+    grid-template-columns: 1fr 6px 320px;
+    gap: 0;
     background: var(--line);
     min-height: 0;
   }
+  .resizer {
+    background: var(--line);
+    cursor: col-resize;
+    position: relative;
+  }
+  .resizer::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0; left: -3px; right: -3px;
+  }
+  .resizer:hover, .resizer:active { background: var(--accent); }
   .stage {
     background:
       radial-gradient(ellipse at 50% 35%, #fefefe 0%, #ececea 65%, #d6d6d3 100%);
@@ -433,24 +448,32 @@
     color: var(--ink);
   }
 
-  /* Jog panel */
+  /* Jog panel — sized so X, Y, Z and Gripper cards all fit without scrolling */
   .jog {
     background: var(--panel);
-    padding: 16px;
+    padding: 12px;
     overflow-y: auto;
-    display: flex; flex-direction: column; gap: 14px;
+    display: flex; flex-direction: column; gap: 8px;
   }
   .axis-card {
     border: 1px solid var(--line);
     border-radius: 5px;
-    padding: 10px 12px;
+    padding: 8px 10px;
     background: #fff;
     transition: border-color .12s, box-shadow .12s;
     cursor: pointer;
+    flex: 0 0 auto;
   }
   .axis-card.active {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .axis-card.moving {
+    animation: card-glow 0.9s ease-in-out infinite;
+  }
+  @keyframes card-glow {
+    0%, 100% { border-color: var(--warn); box-shadow: 0 0 0 0 oklch(0.72 0.14 70 / 0.55); }
+    50% { border-color: oklch(0.86 0.12 70); box-shadow: 0 0 0 6px oklch(0.72 0.14 70 / 0.30); }
   }
   .axis-card .row {
     display: flex; align-items: center; justify-content: space-between;
@@ -471,6 +494,23 @@
     font-weight: 600;
   }
   .axis-card.active .axis-tag { background: var(--accent); }
+  .axis-status {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 3px;
+    line-height: 1.6;
+  }
+  .axis-status.moving { color: var(--warn); background: oklch(0.72 0.14 70 / 0.14); animation: status-pulse 1.1s ease-in-out infinite; }
+  .axis-status.pass { color: var(--ok); background: oklch(0.62 0.14 150 / 0.14); }
+  .axis-status.fail { color: var(--danger); background: oklch(0.58 0.20 25 / 0.14); }
+  @keyframes status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
   .axis-card .axis-pos-wrap { display: flex; flex-direction: column; align-items: flex-end; }
   .axis-card .axis-pos {
     font-family: var(--mono);
@@ -492,9 +532,8 @@
   /* Inline target editor inside each axis card */
   .axis-card .target-row {
     display: flex; align-items: center;
-    margin-top: 8px;
     border: 1px solid var(--line);
-    border-radius: 4px;
+    border-radius: 3px;
     background: #fff;
     overflow: hidden;
     transition: border-color .12s;
@@ -502,64 +541,98 @@
   .axis-card.active .target-row { border-color: var(--accent); }
   .axis-card .target-row button {
     border: 0; background: transparent;
-    padding: 7px 11px;
+    padding: 4px 5px;
     color: var(--ink-2);
     cursor: pointer;
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1;
   }
   .axis-card .target-row button:hover { background: var(--panel-2); color: var(--accent-ink); }
   .axis-card .target-row input {
     flex: 1; min-width: 0;
     border: 0; background: transparent;
-    text-align: right;
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 500;
-    padding: 7px 4px;
-    color: var(--ink);
-    font-variant-numeric: tabular-nums;
-  }
-  .axis-card .target-row input:focus { outline: none; }
-  .axis-card .target-row .u {
-    padding: 0 9px 0 4px;
-    color: var(--muted);
+    text-align: center;
     font-family: var(--mono);
     font-size: 10.5px;
-    white-space: nowrap;
+    font-weight: 500;
+    padding: 4px 0;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
   }
+  .axis-card .target-row input::-webkit-outer-spin-button,
+  .axis-card .target-row input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .axis-card .target-row input:focus { outline: none; }
   .axis-card .target-row.dirty { background: oklch(0.97 0.04 90 / 0.6); }
   .axis-card .axis-range {
     font-family: var(--mono);
     font-size: 10px;
     color: var(--muted);
-    margin-top: 6px;
+    margin-top: 4px;
     display: flex; justify-content: space-between;
     font-variant-numeric: tabular-nums;
   }
   .axis-card .meter {
-    margin-top: 8px;
-    height: 4px;
+    margin-top: 7px;
+    height: 8px;
     background: var(--line-soft);
-    border-radius: 2px;
+    border-radius: 4px;
     position: relative;
-    overflow: hidden;
+    cursor: pointer;
+    touch-action: none;
   }
   .axis-card .meter .fill {
     position: absolute; left: 0; top: 0; bottom: 0;
     background: var(--ink-2);
-    border-radius: 2px;
+    border-radius: 4px;
     transition: width .25s ease;
   }
-  .axis-card.active .meter .fill { background: var(--accent); }
+  .axis-card .meter .fill::after {
+    content: '';
+    position: absolute; top: 50%; right: -5px;
+    width: 10px; height: 10px;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: var(--ink-2);
+    box-shadow: 0 0 0 2px #fff;
+  }
+  .axis-card.active .meter .fill,
+  .axis-card.active .meter .fill::after { background: var(--accent); }
+  .axis-card .meter:hover .fill,
+  .axis-card .meter:hover .fill::after { background: var(--accent-ink); }
+  /* While dragging, show the proposed (unconfirmed) pulse position in amber. */
+  .axis-card .meter.previewing .fill,
+  .axis-card .meter.previewing .fill::after {
+    background: var(--warn);
+    transition: none;
+  }
+  /* While the axis is actually moving, animate the fill with a moving stripe pattern. */
+  .axis-card .meter.moving .fill {
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0) 0 8px,
+      rgba(255,255,255,0.45) 8px 16px
+    );
+    background-size: 22.6px 22.6px;
+    background-color: var(--warn);
+    animation: meter-stripes 0.6s linear infinite;
+  }
+  .axis-card .meter.moving .fill::after { background: var(--warn); }
+  @keyframes meter-stripes {
+    from { background-position: 0 0; }
+    to { background-position: 22.6px 0; }
+  }
 
   .jog-topbar {
     display: flex;
     gap: 8px;
-    margin-bottom: 12px;
-    padding-bottom: 12px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
     border-bottom: 1px solid var(--line-soft);
+    flex: 0 0 auto;
   }
   .jog-topbar .btn { flex: 1; }
 
@@ -657,7 +730,23 @@
     font-size: 10.5px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+    cursor: pointer;
+    flex: 0 0 auto;
   }
+  .log-toggle {
+    border: 1px solid #2d3137;
+    background: #202327;
+    color: #b1b6bb;
+    border-radius: 3px;
+    width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    padding: 0;
+  }
+  .log-toggle:hover { background: #2a2e33; color: #fff; }
+  .telemetry-collapsed .log-body { display: none; }
   .log-head .chips { display: flex; gap: 6px; margin-left: auto; }
   .log-chip {
     padding: 2px 8px;
@@ -724,7 +813,7 @@
   /* ===== Speed / Acc / Step trio ===== */
   .axis-card .param-trio {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
     gap: 5px;
     margin-top: 8px;
     padding-top: 8px;
@@ -771,7 +860,7 @@
   }
   .axis-card .card-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(5, 1fr);
     gap: 5px;
     margin-top: 8px;
   }
@@ -798,7 +887,11 @@
     border-color: var(--accent);
     color: var(--accent-ink);
   }
+  .axis-card .card-actions button.icon-btn {
+    padding: 4px 5px;
+  }
   .axis-card .card-actions button .icon { font-size: 12px; }
+  .axis-card .card-actions button.icon-btn .icon { font-size: 14px; line-height: 1; }
   .axis-card .card-actions .enable-btn.on {
     background: oklch(0.62 0.14 150 / 0.12);
     border-color: oklch(0.62 0.14 150);
@@ -806,6 +899,43 @@
   }
   .axis-card .card-actions .enable-btn.on:hover {
     background: oklch(0.62 0.14 150 / 0.20);
+  }
+  .axis-card .card-actions .encoder-btn.on {
+    background: oklch(0.62 0.14 150 / 0.12);
+    border-color: oklch(0.62 0.14 150);
+    color: oklch(0.42 0.14 150);
+  }
+  .axis-card .card-actions .encoder-btn.on:hover {
+    background: oklch(0.62 0.14 150 / 0.20);
+  }
+  .axis-card .card-actions .reset-btn:hover {
+    background: oklch(0.65 0.20 25 / 0.12);
+    border-color: oklch(0.62 0.20 25);
+    color: oklch(0.5 0.20 25);
+  }
+
+  /* When the axis panel is widened (drag the resizer), pack Spd/Acc/Step
+     and Enable/Origin/Home into a single 6-column row to save vertical
+     space and put every control within reach. */
+  .jog.wide .axis-card .param-actions {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    align-items: end;
+    gap: 5px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .jog.wide .axis-card .param-trio,
+  .jog.wide .axis-card .card-actions {
+    display: contents;
+  }
+  .jog.wide .axis-card .param-trio .pf.target-pf {
+    grid-column: span 2;
+  }
+  .jog.wide .axis-card .card-actions button {
+    height: 100%;
+    aspect-ratio: auto;
   }
 
   /* ===== Sequence Move editor (sidebar) ===== */
@@ -1106,7 +1236,7 @@
       <button class="pbtn danger-text" onclick="window.resetAxisParamDefaults()">Reset to defaults</button>
       <span style="flex: 1"></span>
       <button class="pbtn" onclick="window.closeAxisParam()">Cancel</button>
-      <button class="pbtn primary" onclick="window.saveAxisParam()">Save</button>
+      <button class="pbtn primary" onclick="window.saveAxisParam()">Set Motor</button>
     </div>
   </div>
 </div>
