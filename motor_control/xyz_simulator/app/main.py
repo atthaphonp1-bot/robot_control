@@ -83,7 +83,7 @@ def get_version():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     version_path = os.path.join(base_dir, "env.json")
 
-    with open(version_path, "r") as f:
+    with open(version_path, "r", encoding="utf-8") as f:
         data = json.load(f)
         return data[0]["version"]
     
@@ -92,9 +92,9 @@ def get_environment_variable(variable):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     version_path = os.path.join(base_dir, "env.json")
 
-    with open(version_path, "r") as f:
+    with open(version_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-        if variable == "ems_version": 
+        if variable == "ems_version":
             return data[0]["ems_version"]
         
         elif variable == "database_path": 
@@ -148,7 +148,7 @@ async def robot_control(request: Request):
     # (`window.SERVER_AXES = {};`) so it also works opened standalone.
     base_dir = os.path.dirname(os.path.abspath(__file__))
     template_path = os.path.join(base_dir, "templates", "index.html")
-    with open(template_path, "r") as f:
+    with open(template_path, "r", encoding="utf-8") as f:
         html = f.read()
     axes_json = json.dumps(build_axes_context())
     html = html.replace(
