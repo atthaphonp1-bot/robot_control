@@ -121,7 +121,7 @@ Commit `robot_control.src.jsx` AND the regenerated `robot_control.js` together.
 pip install -r requirements.txt
 # point app/env.json "database_path" at the repo's absolute db/ path first
 cd motor_control/xyz_simulator
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000   # open http://localhost:8000/
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001   # open http://localhost:8001/
 ```
 
 Standalone preview (no server, no internet):

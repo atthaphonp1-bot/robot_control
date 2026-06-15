@@ -37,9 +37,9 @@ pip install -r requirements.txt
 # The active config in db/ems_config.db -> csos_alpha_robot_static.db (present).
 
 cd motor_control/xyz_simulator
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
-Then open <http://localhost:8000/>. The axis cards / 3D view reflect the DB
+Then open <http://localhost:8001/>. The axis cards / 3D view reflect the DB
 (`X` stroke_max 116000, `Y` 50000, `Z` 26000, `G` 7000).
 
 In production the EMS service uses `run.sh`, which picks the right interpreter and
