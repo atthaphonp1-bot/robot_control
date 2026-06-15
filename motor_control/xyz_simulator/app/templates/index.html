@@ -107,6 +107,28 @@
   .pill.ok .dot { background: var(--ok); box-shadow: 0 0 6px oklch(0.62 0.14 150 / 0.6); }
   .pill.warn .dot { background: var(--warn); }
   .pill.bad .dot { background: var(--danger); }
+  .led-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #2a2e33;
+    border: 1px solid transparent;
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #8d9299;
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .led-btn svg { width: 13px; height: 13px; }
+  .led-btn:hover { border-color: var(--accent); color: #e9eaec; }
+  .led-btn.on {
+    background: oklch(0.72 0.14 70 / 0.18);
+    border-color: var(--warn);
+    color: oklch(0.85 0.14 70);
+  }
+  .led-btn.on:hover { background: oklch(0.72 0.14 70 / 0.28); }
   .estop {
     margin-left: 10px;
     padding: 6px 14px 6px 28px;
@@ -609,6 +631,33 @@
     background: var(--warn);
     transition: none;
   }
+  /* Live pulse readout that follows the drag handle while previewing. */
+  .axis-card .meter .meter-tip {
+    position: absolute;
+    bottom: 100%;
+    margin-bottom: 7px;
+    transform: translateX(-50%);
+    background: var(--warn);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 2;
+    font-variant-numeric: tabular-nums;
+  }
+  .axis-card .meter .meter-tip::after {
+    content: '';
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--warn);
+  }
   /* While the axis is actually moving, animate the fill with a moving stripe pattern. */
   .axis-card .meter.moving .fill {
     background-image: repeating-linear-gradient(
@@ -892,6 +941,11 @@
   }
   .axis-card .card-actions button .icon { font-size: 12px; }
   .axis-card .card-actions button.icon-btn .icon { font-size: 14px; line-height: 1; }
+  .axis-card .card-actions button.icon-btn .icon svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
   .axis-card .card-actions .enable-btn.on {
     background: oklch(0.62 0.14 150 / 0.12);
     border-color: oklch(0.62 0.14 150);
@@ -969,6 +1023,8 @@
   .seq-toolbar button.primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
   .seq-toolbar button.danger-text { color: var(--danger); }
   .seq-toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .seq-toolbar button.icon-only { flex: 0 0 32px; padding: 6px 0; }
+  .seq-toolbar button.icon-only svg { width: 14px; height: 14px; display: block; }
 
   .seq-list { padding: 10px 12px 20px; }
   .seq-empty {
@@ -1041,6 +1097,7 @@
   .seq-actions button:hover { background: var(--panel-2); color: var(--accent-ink); border-color: var(--accent); }
   .seq-actions button.del:hover { color: var(--danger); border-color: var(--danger); background: oklch(0.58 0.20 25 / 0.08); }
   .seq-actions button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .seq-actions button svg { width: 12px; height: 12px; display: block; }
   .seq-step-body {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;

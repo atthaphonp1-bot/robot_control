@@ -217,6 +217,8 @@ function App() {
     Z: true,
     G: true
   });
+  // Status LED on the gantry (UI-local toggle; starts off).
+  const [ledOn, setLedOn] = useState(false);
   // Sequence Move: ordered list of {id, motor, pulse, speed, acc}. Persisted in localStorage.
   const SEQ_KEY = 'robot-sequence';
   const [sequence, setSequence] = useState(() => {
@@ -243,6 +245,7 @@ function App() {
   useEffect(() => {
     localStorage.setItem(SEQ_KEY, JSON.stringify(sequence));
   }, [sequence]);
+  const seqFileInputRef = useRef(null);
   const draggingRef = useRef(false);
 
   // Width (px) of the right-hand jog panel (X/Y/Z/G cards), resizable by
@@ -1008,8 +1011,82 @@ function App() {
     if (!confirm('Clear all sequence steps?')) return;
     setSequence([]);
   };
+  const seqExport = () => {
+    const data = JSON.stringify(sequence.map(_ref => {
+      let {
+        motor,
+        pulse,
+        speed,
+        acc
+      } = _ref;
+      return {
+        motor,
+        pulse,
+        speed,
+        acc
+      };
+    }), null, 2);
+    const blob = new Blob([data], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sequence-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    pushLog({
+      kind: 'evt',
+      dir: 'EVT',
+      target: '/sequence',
+      msg: /*#__PURE__*/React.createElement(React.Fragment, null, "exported ", /*#__PURE__*/React.createElement("span", {
+        className: "n"
+      }, sequence.length), " step(s) to file")
+    });
+  };
+  const seqImportClick = () => seqFileInputRef.current?.click();
+  const seqImportFile = e => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch {
+        alert('Invalid JSON file.');
+        return;
+      }
+      if (!Array.isArray(data) || !data.every(s => s && AXES.includes(s.motor))) {
+        alert('Invalid sequence file: expected a list of steps with a valid "motor" axis.');
+        return;
+      }
+      if (sequence.length > 0 && !window.confirm(`Replace the current ${sequence.length} step(s) with ${data.length} step(s) from this file?`)) return;
+      const imported = data.map((s, i) => ({
+        id: i + 1,
+        motor: s.motor,
+        pulse: Number(s.pulse) || 0,
+        speed: Number(s.speed) || 0,
+        acc: Number(s.acc) || 0
+      }));
+      setSequence(imported);
+      pushLog({
+        kind: 'evt',
+        dir: 'EVT',
+        target: '/sequence',
+        msg: /*#__PURE__*/React.createElement(React.Fragment, null, "imported ", /*#__PURE__*/React.createElement("span", {
+          className: "n"
+        }, imported.length), " step(s) from file")
+      });
+    };
+    reader.readAsText(file);
+  };
   const seqRun = () => {
     if (sequence.length === 0 || seqRunningRef.current) return;
+    if (!window.confirm(`Run all ${sequence.length} step(s) in this sequence?`)) return;
     pushLog({
       kind: 'api',
       dir: 'POST',
@@ -1041,6 +1118,22 @@ function App() {
       msg: /*#__PURE__*/React.createElement(React.Fragment, null, "EMERGENCY STOP latched \u2014 all axes halted")
     });
   };
+  const toggleLed = () => {
+    setLedOn(o => {
+      const next = !o;
+      pushLog({
+        kind: 'evt',
+        dir: 'EVT',
+        target: conn.mqttTopic + '/led',
+        msg: /*#__PURE__*/React.createElement(React.Fragment, null, '{ ', /*#__PURE__*/React.createElement("span", {
+          className: "k"
+        }, "\"led\""), ": ", /*#__PURE__*/React.createElement("span", {
+          className: "s"
+        }, String(next)), " ", '}')
+      });
+      return next;
+    });
+  };
   return /*#__PURE__*/React.createElement("div", {
     className: `app ${telemetryOpen ? '' : 'telemetry-collapsed'}`
   }, moveToast && /*#__PURE__*/React.createElement("div", {
@@ -1066,6 +1159,33 @@ function App() {
   }, /*#__PURE__*/React.createElement("span", {
     className: "dot"
   }), moving ? 'MOVING' : 'IDLE'), /*#__PURE__*/React.createElement("button", {
+    className: `led-btn ${ledOn ? 'on' : ''}`,
+    onClick: toggleLed,
+    title: ledOn ? 'LED on — click to turn off' : 'LED off — click to turn on'
+  }, /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, ledOn ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("path", {
+    d: "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M9 18h6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M10 22h4"
+  })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("path", {
+    d: "M16.8 11.2c.8-.9 1.2-2 1.2-3.2a6 6 0 0 0-9.3-5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "m2 2 20 20"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M6.3 6.3a4.67 4.67 0 0 0 1.2 5.2c.7.7 1.3 1.5 1.5 2.5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M9 18h6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M10 22h4"
+  }))), "LED"), /*#__PURE__*/React.createElement("button", {
     className: "estop",
     onClick: estop
   }, "E-STOP"))), /*#__PURE__*/React.createElement("div", {
@@ -1088,6 +1208,50 @@ function App() {
   }, "\u25B6 Run All"), /*#__PURE__*/React.createElement("button", {
     onClick: seqAdd
   }, "+ Add Step"), /*#__PURE__*/React.createElement("button", {
+    className: "icon-only",
+    onClick: seqExport,
+    disabled: sequence.length === 0,
+    title: "Export sequence to a JSON file"
+  }, /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M12 15V3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "m7 10 5 5 5-5"
+  }))), /*#__PURE__*/React.createElement("button", {
+    className: "icon-only",
+    onClick: seqImportClick,
+    title: "Import sequence from a JSON file"
+  }, /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M12 3v12"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "m17 8-5-5-5 5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+  }))), /*#__PURE__*/React.createElement("input", {
+    ref: seqFileInputRef,
+    type: "file",
+    accept: "application/json",
+    style: {
+      display: 'none'
+    },
+    onChange: seqImportFile
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "icon-only",
     onClick: seqClear,
     disabled: sequence.length === 0,
     title: "Clear all steps"
@@ -1130,7 +1294,18 @@ function App() {
   }, "\u2193"), /*#__PURE__*/React.createElement("button", {
     title: "Insert step below",
     onClick: () => seqInsertAfter(idx)
-  }, "\u2295"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M5 12h14"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 5v14"
+  }))), /*#__PURE__*/React.createElement("button", {
     title: "Delete step",
     className: "del",
     onClick: () => seqDelete(idx)
@@ -1386,7 +1561,12 @@ function App() {
         style: {
           width: (fillVal - r.min) / (r.max - r.min) * 100 + '%'
         }
-      }));
+      }), previewVal != null && /*#__PURE__*/React.createElement("div", {
+        className: "meter-tip",
+        style: {
+          left: (fillVal - r.min) / (r.max - r.min) * 100 + '%'
+        }
+      }, Math.round(previewVal).toLocaleString(), " ", motor.unit));
     })(), /*#__PURE__*/React.createElement("div", {
       className: "axis-range"
     }, /*#__PURE__*/React.createElement("span", null, "min ", r.min.toLocaleString()), /*#__PURE__*/React.createElement("span", null, "max ", r.max.toLocaleString())), /*#__PURE__*/React.createElement("div", {
@@ -1456,7 +1636,33 @@ function App() {
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, motorEnabled[a] ? '⏼' : '⏻')), /*#__PURE__*/React.createElement("button", {
+    }, motorEnabled[a] ? /*#__PURE__*/React.createElement("svg", {
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M12 2v10"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M18.4 6.6a9 9 0 1 1-12.77.04"
+    })) : /*#__PURE__*/React.createElement("svg", {
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M18.36 6.64A9 9 0 0 1 20.77 15"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M6.16 6.16a9 9 0 1 0 12.68 12.68"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M12 2v4"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "m2 2 20 20"
+    })))), /*#__PURE__*/React.createElement("button", {
       className: "origin-btn icon-btn",
       title: `${a}: Move to origin (${window.AXIS_PARAMS?.[a]?.origin_pos ?? 0} ${motor.unit})`,
       onClick: () => {
@@ -1465,7 +1671,38 @@ function App() {
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, "\u2295")), /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("svg", {
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx: "12",
+      cy: "12",
+      r: "10"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "22",
+      x2: "18",
+      y1: "12",
+      y2: "12"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "6",
+      x2: "2",
+      y1: "12",
+      y2: "12"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "12",
+      x2: "12",
+      y1: "6",
+      y2: "2"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "12",
+      x2: "12",
+      y1: "22",
+      y2: "18"
+    })))), /*#__PURE__*/React.createElement("button", {
       className: "home-btn icon-btn",
       title: `${a}: Home to ${RANGE[a].home.toLocaleString()} ${motor.unit}`,
       onClick: () => {
@@ -1474,7 +1711,18 @@ function App() {
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, "\u2302")), /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("svg", {
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+    })))), /*#__PURE__*/React.createElement("button", {
       className: `encoder-btn icon-btn ${encoderEnabled[a] ? 'on' : ''}`,
       title: encoderEnabled[a] ? `${a}: Encoder feedback on — click to disable` : `${a}: Encoder feedback off — click to enable`,
       onClick: () => {
@@ -1483,7 +1731,22 @@ function App() {
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, "\u25CE")), /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("svg", {
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx: "12",
+      cy: "12",
+      r: "10"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: "12",
+      cy: "12",
+      r: "2"
+    })))), /*#__PURE__*/React.createElement("button", {
       className: "reset-btn icon-btn",
       title: `${a}: Reset error / fault state`,
       onClick: () => {
@@ -1492,7 +1755,18 @@ function App() {
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, "\u27F2")))));
+    }, /*#__PURE__*/React.createElement("svg", {
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M3 3v5h5"
+    })))))));
   }))))), /*#__PURE__*/React.createElement("footer", {
     className: "log"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1539,7 +1813,7 @@ function App() {
 /* ============================================
    Numeric "Goto" panel
    ============================================ */
-function NumericPanel(_ref) {
+function NumericPanel(_ref2) {
   let {
     pos,
     tgt,
@@ -1547,7 +1821,7 @@ function NumericPanel(_ref) {
     speed,
     onGo,
     onHome
-  } = _ref;
+  } = _ref2;
   const [val, setVal] = useState({
     X: tgt.X,
     Y: tgt.Y,
@@ -1693,7 +1967,7 @@ function NumericPanel(_ref) {
    - Z home = retracted (z=0 → rod fully UP)
    - Mouse drag: click on a part to grab + drag that axis
    ============================================ */
-function RobotSvg(_ref2) {
+function RobotSvg(_ref3) {
   let {
     pos,
     active,
@@ -1705,7 +1979,7 @@ function RobotSvg(_ref2) {
     onArrowJog,
     view,
     setView
-  } = _ref2;
+  } = _ref3;
   const svgRef = useRef(null);
   const dragRef = useRef(null);
   const viewDragRef = useRef(null);
@@ -1790,8 +2064,8 @@ function RobotSvg(_ref2) {
     for (var _len = arguments.length, pts = new Array(_len), _key = 0; _key < _len; _key++) {
       pts[_key] = arguments[_key];
     }
-    return pts.map(_ref3 => {
-      let [x, y, z] = _ref3;
+    return pts.map(_ref4 => {
+      let [x, y, z] = _ref4;
       return p(x, y, z).join(',');
     }).join(' ');
   };
@@ -1813,7 +2087,7 @@ function RobotSvg(_ref2) {
 
   // ----- helpers -----
   // 3-face box that picks the camera-facing faces based on view (look vector)
-  const Box = _ref4 => {
+  const Box = _ref5 => {
     let {
       x0,
       y0,
@@ -1827,7 +2101,7 @@ function RobotSvg(_ref2) {
       stroke = '#6e7176',
       sw = 0.5,
       opacity = 1
-    } = _ref4;
+    } = _ref5;
     const xF = look[0] < 0 ? x1 : x0;
     const yF = look[1] < 0 ? y1 : y0;
     const zF = look[2] < 0 ? z1 : z0;
@@ -2422,30 +2696,30 @@ function RobotSvg(_ref2) {
 /* ============================================
    UI helpers
    ============================================ */
-function Section(_ref5) {
+function Section(_ref6) {
   let {
     title,
     children
-  } = _ref5;
+  } = _ref6;
   return /*#__PURE__*/React.createElement("div", {
     className: "section"
   }, /*#__PURE__*/React.createElement("h3", null, title), children);
 }
-function Field(_ref6) {
+function Field(_ref7) {
   let {
     label,
     children
-  } = _ref6;
+  } = _ref7;
   return /*#__PURE__*/React.createElement("div", {
     className: "field"
   }, /*#__PURE__*/React.createElement("label", null, label), /*#__PURE__*/React.createElement("div", null, children));
 }
-function UnitInput(_ref7) {
+function UnitInput(_ref8) {
   let {
     value,
     unit,
     onChange
-  } = _ref7;
+  } = _ref8;
   return /*#__PURE__*/React.createElement("div", {
     className: "input-wrap"
   }, /*#__PURE__*/React.createElement("input", {

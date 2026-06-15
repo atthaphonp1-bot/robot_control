@@ -121,6 +121,8 @@ function App() {
   const [motorEnabled, setMotorEnabled] = useState({ X: true, Y: true, Z: true, G: true });
   // Per-axis encoder feedback state (UI-local; encoders start enabled).
   const [encoderEnabled, setEncoderEnabled] = useState({ X: true, Y: true, Z: true, G: true });
+  // Status LED on the gantry (UI-local toggle; starts off).
+  const [ledOn, setLedOn] = useState(false);
   // Sequence Move: ordered list of {id, motor, pulse, speed, acc}. Persisted in localStorage.
   const SEQ_KEY = 'robot-sequence';
   const [sequence, setSequence] = useState(() => {
@@ -136,6 +138,7 @@ function App() {
   const [activeStepId, setActiveStepId] = useState(null);
   const [seqRunning, setSeqRunning] = useState(false);
   useEffect(() => { localStorage.setItem(SEQ_KEY, JSON.stringify(sequence)); }, [sequence]);
+  const seqFileInputRef = useRef(null);
   const draggingRef = useRef(false);
 
   // Width (px) of the right-hand jog panel (X/Y/Z/G cards), resizable by
@@ -550,8 +553,55 @@ function App() {
     setSequence([]);
   };
 
+  const seqExport = () => {
+    const data = JSON.stringify(sequence.map(({ motor, pulse, speed, acc }) => ({ motor, pulse, speed, acc })), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sequence-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    pushLog({ kind:'evt', dir:'EVT', target: '/sequence', msg: <>exported <span className="n">{sequence.length}</span> step(s) to file</>});
+  };
+
+  const seqImportClick = () => seqFileInputRef.current?.click();
+  const seqImportFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch {
+        alert('Invalid JSON file.');
+        return;
+      }
+      if (!Array.isArray(data) || !data.every(s => s && AXES.includes(s.motor))) {
+        alert('Invalid sequence file: expected a list of steps with a valid "motor" axis.');
+        return;
+      }
+      if (sequence.length > 0 && !window.confirm(`Replace the current ${sequence.length} step(s) with ${data.length} step(s) from this file?`)) return;
+      const imported = data.map((s, i) => ({
+        id: i + 1,
+        motor: s.motor,
+        pulse: Number(s.pulse) || 0,
+        speed: Number(s.speed) || 0,
+        acc: Number(s.acc) || 0,
+      }));
+      setSequence(imported);
+      pushLog({ kind:'evt', dir:'EVT', target: '/sequence', msg: <>imported <span className="n">{imported.length}</span> step(s) from file</>});
+    };
+    reader.readAsText(file);
+  };
+
   const seqRun = () => {
     if (sequence.length === 0 || seqRunningRef.current) return;
+    if (!window.confirm(`Run all ${sequence.length} step(s) in this sequence?`)) return;
     pushLog({ kind:'api', dir:'POST', target: conn.apiUrl + '/sequence',
       msg: <>running <span className="n">{sequence.length}</span> step(s)</>});
     moveQueueRef.current = sequence.map(s => {
@@ -574,6 +624,15 @@ function App() {
     pushLog({ kind:'err', dir:'EVT', target: conn.mqttTopic + '/estop', msg: <>EMERGENCY STOP latched — all axes halted</>});
   };
 
+  const toggleLed = () => {
+    setLedOn(o => {
+      const next = !o;
+      pushLog({ kind:'evt', dir:'EVT', target: conn.mqttTopic + '/led',
+        msg: <>{'{ '}<span className="k">"led"</span>: <span className="s">{String(next)}</span> {'}'}</>});
+      return next;
+    });
+  };
+
   return (
     <div className={`app ${telemetryOpen ? '' : 'telemetry-collapsed'}`}>
       {moveToast && <div className="param-toast ok">{moveToast}</div>}
@@ -586,6 +645,30 @@ function App() {
           <span className={`pill ${connected.api ? 'ok':'bad'}`}><span className="dot"></span>API · {connected.api ? '200 OK' : 'DOWN'}</span>
           <span className={`pill ${connected.mqtt ? 'ok':'bad'}`}><span className="dot"></span>MQTT · {connected.mqtt ? 'CONNECTED' : 'OFFLINE'}</span>
           <span className={`pill ${moving ? 'warn':'ok'}`}><span className="dot"></span>{moving ? 'MOVING' : 'IDLE'}</span>
+          <button
+            className={`led-btn ${ledOn ? 'on' : ''}`}
+            onClick={toggleLed}
+            title={ledOn ? 'LED on — click to turn off' : 'LED off — click to turn on'}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {ledOn ? (
+                <>
+                  <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+                  <path d="M9 18h6"/>
+                  <path d="M10 22h4"/>
+                </>
+              ) : (
+                <>
+                  <path d="M16.8 11.2c.8-.9 1.2-2 1.2-3.2a6 6 0 0 0-9.3-5"/>
+                  <path d="m2 2 20 20"/>
+                  <path d="M6.3 6.3a4.67 4.67 0 0 0 1.2 5.2c.7.7 1.3 1.5 1.5 2.5"/>
+                  <path d="M9 18h6"/>
+                  <path d="M10 22h4"/>
+                </>
+              )}
+            </svg>
+            LED
+          </button>
           <button className="estop" onClick={estop}>E-STOP</button>
         </div>
       </header>
@@ -605,7 +688,22 @@ function App() {
               <button className="primary" onClick={seqRun} disabled={sequence.length === 0}>▶ Run All</button>
             )}
             <button onClick={seqAdd}>+ Add Step</button>
-            <button onClick={seqClear} disabled={sequence.length === 0} title="Clear all steps">↺</button>
+            <button className="icon-only" onClick={seqExport} disabled={sequence.length === 0} title="Export sequence to a JSON file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 15V3"/>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <path d="m7 10 5 5 5-5"/>
+              </svg>
+            </button>
+            <button className="icon-only" onClick={seqImportClick} title="Import sequence from a JSON file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v12"/>
+                <path d="m17 8-5-5-5 5"/>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              </svg>
+            </button>
+            <input ref={seqFileInputRef} type="file" accept="application/json" style={{display:'none'}} onChange={seqImportFile} />
+            <button className="icon-only" onClick={seqClear} disabled={sequence.length === 0} title="Clear all steps">↺</button>
           </div>
 
           <div className="seq-list">
@@ -630,7 +728,12 @@ function App() {
                   <div className="seq-actions" onClick={e => e.stopPropagation()}>
                     <button title="Move up" onClick={() => seqMoveUp(idx)} disabled={idx === 0}>↑</button>
                     <button title="Move down" onClick={() => seqMoveDown(idx)} disabled={idx === sequence.length - 1}>↓</button>
-                    <button title="Insert step below" onClick={() => seqInsertAfter(idx)}>⊕</button>
+                    <button title="Insert step below" onClick={() => seqInsertAfter(idx)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14"/>
+                        <path d="M12 5v14"/>
+                      </svg>
+                    </button>
                     <button title="Delete step" className="del" onClick={() => seqDelete(idx)}>×</button>
                   </div>
                 </div>
@@ -813,6 +916,11 @@ function App() {
                       }}
                     >
                       <div className="fill" style={{width: ((fillVal-r.min)/(r.max-r.min)*100)+'%'}}></div>
+                      {previewVal != null && (
+                        <div className="meter-tip" style={{left: ((fillVal-r.min)/(r.max-r.min)*100)+'%'}}>
+                          {Math.round(previewVal).toLocaleString()} {motor.unit}
+                        </div>
+                      )}
                     </div>
                       );
                     })()}
@@ -860,35 +968,72 @@ function App() {
                           title={motorEnabled[a] ? `${a}: Motor On — click to disable` : `${a}: Motor disabled — click to enable`}
                           onClick={() => { setActiveAxis(a); toggleMotor(a); }}
                         >
-                          <span className="icon">{motorEnabled[a] ? '⏼' : '⏻'}</span>
+                          <span className="icon">
+                            {motorEnabled[a] ? (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 2v10"/>
+                                <path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18.36 6.64A9 9 0 0 1 20.77 15"/>
+                                <path d="M6.16 6.16a9 9 0 1 0 12.68 12.68"/>
+                                <path d="M12 2v4"/>
+                                <path d="m2 2 20 20"/>
+                              </svg>
+                            )}
+                          </span>
                         </button>
                         <button
                           className="origin-btn icon-btn"
                           title={`${a}: Move to origin (${(window.AXIS_PARAMS?.[a]?.origin_pos) ?? 0} ${motor.unit})`}
                           onClick={() => { setActiveAxis(a); originAxis(a); }}
                         >
-                          <span className="icon">⊕</span>
+                          <span className="icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/>
+                              <line x1="22" x2="18" y1="12" y2="12"/>
+                              <line x1="6" x2="2" y1="12" y2="12"/>
+                              <line x1="12" x2="12" y1="6" y2="2"/>
+                              <line x1="12" x2="12" y1="22" y2="18"/>
+                            </svg>
+                          </span>
                         </button>
                         <button
                           className="home-btn icon-btn"
                           title={`${a}: Home to ${RANGE[a].home.toLocaleString()} ${motor.unit}`}
                           onClick={() => { setActiveAxis(a); homeAxis(a); }}
                         >
-                          <span className="icon">⌂</span>
+                          <span className="icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+                              <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            </svg>
+                          </span>
                         </button>
                         <button
                           className={`encoder-btn icon-btn ${encoderEnabled[a] ? 'on' : ''}`}
                           title={encoderEnabled[a] ? `${a}: Encoder feedback on — click to disable` : `${a}: Encoder feedback off — click to enable`}
                           onClick={() => { setActiveAxis(a); toggleEncoder(a); }}
                         >
-                          <span className="icon">◎</span>
+                          <span className="icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/>
+                              <circle cx="12" cy="12" r="2"/>
+                            </svg>
+                          </span>
                         </button>
                         <button
                           className="reset-btn icon-btn"
                           title={`${a}: Reset error / fault state`}
                           onClick={() => { setActiveAxis(a); resetError(a); }}
                         >
-                          <span className="icon">⟲</span>
+                          <span className="icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                              <path d="M3 3v5h5"/>
+                            </svg>
+                          </span>
                         </button>
                       </div>
                     </div>
