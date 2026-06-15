@@ -146,8 +146,17 @@ function App() {
     G: RANGE.G.home
   });
   // The robot's actual simulated position, animating toward `tgt` in the
-  // background. Get Position / Get All sample this into `pos`.
+  // background. Get Position / Get All sample this into `pos`. Mirrored into
+  // `simPos` state (below) so the 3D view can re-render every frame.
   const simPosRef = useRef({
+    X: RANGE.X.home,
+    Y: RANGE.Y.home,
+    Z: RANGE.Z.home,
+    G: RANGE.G.home
+  });
+  // Live mirror of simPosRef, used to drive the 3D view so it animates
+  // smoothly during jog/goto/home instead of jumping only on Get Position.
+  const [simPos, setSimPos] = useState({
     X: RANGE.X.home,
     Y: RANGE.Y.home,
     Z: RANGE.Z.home,
@@ -171,6 +180,15 @@ function App() {
     Z: 'idle',
     G: 'idle'
   });
+  // Transient "move complete" toast — shown briefly after a move (jog/goto/
+  // home/sequence step/axis drag) finishes, summarizing where each moved axis ended up.
+  const [moveToast, setMoveToast] = useState(null);
+  const moveToastTimerRef = useRef(null);
+  const showMoveToast = useCallback(text => {
+    setMoveToast(text);
+    clearTimeout(moveToastTimerRef.current);
+    moveToastTimerRef.current = setTimeout(() => setMoveToast(null), 3000);
+  }, []);
   // Per-axis draft input value for the inline target editor.
   // Bound to the input element; commits to `tgt` on Enter / blur / +-/ explicit Move.
   const [draft, setDraft] = useState({
@@ -401,10 +419,14 @@ function App() {
         }
       });
       simPosRef.current = next;
+      setSimPos(next);
       if (anyRunning) raf = requestAnimationFrame(tick);else {
         simPosRef.current = {
           ...tgt
         };
+        setSimPos({
+          ...tgt
+        });
         setMoving(false);
       }
     };
@@ -479,8 +501,10 @@ function App() {
   }, [tgt, pos, conn.mqttTopic, motor, pushLog]);
 
   // Drag (mouse on robot SVG)
+  const dragOrigRef = useRef({});
   const onDragStart = useCallback(axis => {
     draggingRef.current = true;
+    dragOrigRef.current[axis] = simPosRef.current[axis];
     setActiveAxis(axis);
     pushLog({
       kind: 'mqtt',
@@ -497,42 +521,71 @@ function App() {
       }, "\"drag\""), " ", '}')
     });
   }, [conn.mqttTopic, pushLog]);
+
+  // Live-preview only: move the 3D carriage as the mouse drags, without
+  // touching `pos`/`tgt` yet (those commit on release, after confirmation).
   const onDrag = useCallback((axis, value) => {
     const v = Math.round(clamp(value, RANGE[axis].min, RANGE[axis].max));
     simPosRef.current = {
       ...simPosRef.current,
       [axis]: v
     };
-    setPos(p => ({
+    setSimPos(p => ({
       ...p,
       [axis]: v
     }));
-    setTgt(t => ({
-      ...t,
-      [axis]: v
-    }));
   }, []);
+
+  // On release, ask for confirmation before committing the dragged position
+  // as the new target. Cancelling snaps the 3D preview back to where it was.
   const onDragEnd = useCallback((axis, finalVal) => {
     draggingRef.current = false;
-    pushLog({
-      kind: 'evt',
-      dir: 'TX',
-      target: conn.mqttTopic + '/state',
-      msg: /*#__PURE__*/React.createElement(React.Fragment, null, '{ ', /*#__PURE__*/React.createElement("span", {
-        className: "k"
-      }, "\"axis\""), ":", /*#__PURE__*/React.createElement("span", {
-        className: "s"
-      }, "\"", axis, "\""), ", ", /*#__PURE__*/React.createElement("span", {
-        className: "k"
-      }, "\"pos\""), ":", /*#__PURE__*/React.createElement("span", {
-        className: "n"
-      }, Math.round(finalVal)), ", ", /*#__PURE__*/React.createElement("span", {
-        className: "k"
-      }, "\"unit\""), ":", /*#__PURE__*/React.createElement("span", {
-        className: "s"
-      }, "\"", motor.unit, "\""), " ", '}')
-    });
-  }, [conn.mqttTopic, motor.unit, pushLog]);
+    const original = Math.round(dragOrigRef.current[axis]);
+    const v = Math.round(clamp(finalVal, RANGE[axis].min, RANGE[axis].max));
+    if (v === original) return;
+    if (window.confirm(`Move ${axis} (${RANGE[axis].label}) to ${v.toLocaleString()} ${motor.unit}?`)) {
+      setPos(p => ({
+        ...p,
+        [axis]: v
+      }));
+      setLastRead(r => ({
+        ...r,
+        [axis]: nowStamp()
+      }));
+      setTgt(t => ({
+        ...t,
+        [axis]: v
+      }));
+      pushLog({
+        kind: 'evt',
+        dir: 'TX',
+        target: conn.mqttTopic + '/state',
+        msg: /*#__PURE__*/React.createElement(React.Fragment, null, '{ ', /*#__PURE__*/React.createElement("span", {
+          className: "k"
+        }, "\"axis\""), ":", /*#__PURE__*/React.createElement("span", {
+          className: "s"
+        }, "\"", axis, "\""), ", ", /*#__PURE__*/React.createElement("span", {
+          className: "k"
+        }, "\"pos\""), ":", /*#__PURE__*/React.createElement("span", {
+          className: "n"
+        }, v), ", ", /*#__PURE__*/React.createElement("span", {
+          className: "k"
+        }, "\"unit\""), ":", /*#__PURE__*/React.createElement("span", {
+          className: "s"
+        }, "\"", motor.unit, "\""), " ", '}')
+      });
+      showMoveToast(`Move complete · ${axis} → ${v.toLocaleString()} ${motor.unit}`);
+    } else {
+      simPosRef.current = {
+        ...simPosRef.current,
+        [axis]: original
+      };
+      setSimPos(p => ({
+        ...p,
+        [axis]: original
+      }));
+    }
+  }, [conn.mqttTopic, motor.unit, pushLog, showMoveToast]);
 
   // Keyboard jog
   useEffect(() => {
@@ -846,16 +899,40 @@ function App() {
       // Confirm where the robot actually ended up — only for the axis (or
       // axes) that were actually commanded to move, same as pressing each
       // axis's Get Pos button.
-      movedAxesRef.current.forEach(a => getPosition(a));
+      const moved = movedAxesRef.current;
+      moved.forEach(a => getPosition(a));
+      if (moved.length) {
+        const summary = moved.map(a => `${a} → ${Math.round(simPosRef.current[a]).toLocaleString()}`).join(' · ');
+        showMoveToast(`Move complete · ${summary} ${motor.unit}`);
+      }
       movedAxesRef.current = [];
     }
     wasMovingRef.current = moving;
     // eslint-disable-next-line
   }, [moving]);
 
+  // Stop a running Sequence Move — clears the pending step queue so Hold /
+  // E-STOP / the explicit Stop button all abort "Run All" the same way.
+  const stopSequence = () => {
+    moveQueueRef.current = [];
+    if (seqRunningRef.current) {
+      seqRunningRef.current = false;
+      setSeqRunning(false);
+      setActiveStepId(null);
+      pushLog({
+        kind: 'err',
+        dir: 'EVT',
+        target: '/sequence',
+        msg: /*#__PURE__*/React.createElement(React.Fragment, null, "sequence stopped")
+      });
+    }
+  };
+
   // Freeze the robot at its actual current (simulated) position — cancels any
-  // pending target so the animation stops right where the robot is.
+  // pending target so the animation stops right where the robot is, and
+  // aborts any in-progress Sequence Move.
   const holdHere = () => {
+    stopSequence();
     const here = {
       X: Math.round(simPosRef.current.X),
       Y: Math.round(simPosRef.current.Y),
@@ -863,6 +940,7 @@ function App() {
       G: Math.round(simPosRef.current.G)
     };
     simPosRef.current = here;
+    setSimPos(here);
     setTgt(here);
   };
   const home = () => {
@@ -953,19 +1031,6 @@ function App() {
     setSeqRunning(true);
     drainNext();
   };
-  const seqStop = () => {
-    moveQueueRef.current = [];
-    seqRunningRef.current = false;
-    setSeqRunning(false);
-    setActiveStepId(null);
-    holdHere();
-    pushLog({
-      kind: 'err',
-      dir: 'EVT',
-      target: '/sequence',
-      msg: /*#__PURE__*/React.createElement(React.Fragment, null, "sequence stopped")
-    });
-  };
   const estop = () => {
     holdHere();
     draggingRef.current = false;
@@ -978,7 +1043,9 @@ function App() {
   };
   return /*#__PURE__*/React.createElement("div", {
     className: `app ${telemetryOpen ? '' : 'telemetry-collapsed'}`
-  }, /*#__PURE__*/React.createElement("header", {
+  }, moveToast && /*#__PURE__*/React.createElement("div", {
+    className: "param-toast ok"
+  }, moveToast), /*#__PURE__*/React.createElement("header", {
     className: "topbar"
   }, /*#__PURE__*/React.createElement("div", {
     className: "brand"
@@ -1013,7 +1080,7 @@ function App() {
     className: "seq-toolbar"
   }, seqRunning ? /*#__PURE__*/React.createElement("button", {
     className: "danger-text",
-    onClick: seqStop
+    onClick: holdHere
   }, "\u25A0 Stop") : /*#__PURE__*/React.createElement("button", {
     className: "primary",
     onClick: seqRun,
@@ -1179,7 +1246,7 @@ function App() {
       justifyContent: 'space-between'
     }
   }, /*#__PURE__*/React.createElement("span", null, "min ", RANGE[activeAxis].min.toLocaleString()), /*#__PURE__*/React.createElement("span", null, "max ", RANGE[activeAxis].max.toLocaleString()))), /*#__PURE__*/React.createElement(RobotSvg, {
-    pos: pos,
+    pos: simPos,
     active: activeAxis,
     range: RANGE,
     onPick: setActiveAxis,
