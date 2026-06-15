@@ -3,6 +3,7 @@
 const {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   useCallback
@@ -161,6 +162,15 @@ function App() {
   });
   const [activeAxis, setActiveAxis] = useState('X');
   const [moving, setMoving] = useState(false);
+  // Per-axis move status: 'idle' | 'moving' | 'pass' | 'fail'. 'pass' means the
+  // axis reached its commanded target; 'fail' means the move was interrupted
+  // (e.g. Hold / E-STOP) before the target was reached.
+  const [axisStatus, setAxisStatus] = useState({
+    X: 'idle',
+    Y: 'idle',
+    Z: 'idle',
+    G: 'idle'
+  });
   // Per-axis draft input value for the inline target editor.
   // Bound to the input element; commits to `tgt` on Enter / blur / +-/ explicit Move.
   const [draft, setDraft] = useState({
@@ -169,13 +179,25 @@ function App() {
     Z: RANGE.Z.home,
     G: RANGE.G.home
   });
+  // Per-axis transient preview while dragging the position meter bar — a
+  // proposed pulse value the user hasn't confirmed yet. `pos` (last-read
+  // position) is left untouched until the drag is confirmed and committed.
+  const [meterPreview, setMeterPreview] = useState({});
+  const meterPreviewRef = useRef({});
   // Per-axis motor enable state (UI-local; in real integration this would
-  // round-trip through API/MQTT).
+  // round-trip through API/MQTT). Motors start enabled.
   const [motorEnabled, setMotorEnabled] = useState({
-    X: false,
-    Y: false,
-    Z: false,
-    G: false
+    X: true,
+    Y: true,
+    Z: true,
+    G: true
+  });
+  // Per-axis encoder feedback state (UI-local; encoders start enabled).
+  const [encoderEnabled, setEncoderEnabled] = useState({
+    X: true,
+    Y: true,
+    Z: true,
+    G: true
   });
   // Sequence Move: ordered list of {id, motor, pulse, speed, acc}. Persisted in localStorage.
   const SEQ_KEY = 'robot-sequence';
@@ -204,6 +226,45 @@ function App() {
     localStorage.setItem(SEQ_KEY, JSON.stringify(sequence));
   }, [sequence]);
   const draggingRef = useRef(false);
+
+  // Width (px) of the right-hand jog panel (X/Y/Z/G cards), resizable by
+  // dragging the divider between the 3D stage and the panel. Persisted so
+  // the chosen width survives reloads.
+  const JOG_WIDTH_KEY = 'robot-jog-width';
+  const [jogWidth, setJogWidth] = useState(() => {
+    const saved = +localStorage.getItem(JOG_WIDTH_KEY);
+    return saved >= 280 && saved <= 720 ? saved : 320;
+  });
+  useEffect(() => {
+    localStorage.setItem(JOG_WIDTH_KEY, jogWidth);
+  }, [jogWidth]);
+  const moveBodyRef = useRef(null);
+  const resizingRef = useRef(false);
+  useEffect(() => {
+    const onMove = e => {
+      if (!resizingRef.current || !moveBodyRef.current) return;
+      const rect = moveBodyRef.current.getBoundingClientRect();
+      setJogWidth(clamp(rect.right - e.clientX, 280, 720));
+    };
+    const onUp = () => {
+      if (!resizingRef.current) return;
+      resizingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+  const onResizeStart = () => {
+    resizingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
   // 3D view (orbit/pan/zoom around the gantry)
   const [view, setView] = useState(() => ({
     ...VIEW_PRESETS.iso,
@@ -258,6 +319,7 @@ function App() {
   // Log
   const [log, setLog] = useState(() => seedLog());
   const [logFilter, setLogFilter] = useState('all');
+  const [telemetryOpen, setTelemetryOpen] = useState(true);
   const logRef = useRef(null);
   const pushLog = useCallback(entry => {
     setLog(l => [...l.slice(-200), {
@@ -273,31 +335,73 @@ function App() {
   // (jog/goto/home). Drives `simPosRef` (sampled by Get Position / Get All)
   // and the `moving` status — does NOT touch `pos`, since the real
   // controller doesn't report position in real time either.
-  useEffect(() => {
+  // Each axis moves at its own configured speed (window.AXIS_PARAMS[a].default_speed),
+  // so axes commanded together can finish at different times.
+  const movedAxesRef = useRef([]);
+  const axisDoneRef = useRef({});
+  useLayoutEffect(() => {
     if (draggingRef.current) return; // never animate while dragging
     const diff = AXES.some(a => Math.abs(simPosRef.current[a] - tgt[a]) > 1);
     if (!diff) {
       if (moving) setMoving(false);
       return;
     }
+    const moved = AXES.filter(a => Math.abs(simPosRef.current[a] - tgt[a]) > 1);
+    movedAxesRef.current = moved;
+    axisDoneRef.current = {};
+    setAxisStatus(s => {
+      const next = {
+        ...s
+      };
+      moved.forEach(a => {
+        next[a] = 'moving';
+      });
+      return next;
+    });
     setMoving(true);
     let raf;
     const start = {
       ...simPosRef.current
     };
     const t0 = performance.now();
-    const dist = Math.max(...AXES.map(a => Math.abs(tgt[a] - start[a])));
-    const dur = Math.max(220, dist / motor.speed * 1000);
+    const durs = {};
+    AXES.forEach(a => {
+      const dist = Math.abs(tgt[a] - start[a]);
+      if (dist <= 1) {
+        durs[a] = 0;
+        return;
+      }
+      const speed = window.AXIS_PARAMS?.[a]?.default_speed || motor.speed || 1;
+      // Floor long enough for the moving glow/stripe/badge animations to
+      // complete at least one visible cycle, even on tiny jog steps.
+      durs[a] = Math.max(700, dist / speed * 1000);
+    });
     const tick = t => {
-      const k = Math.min(1, (t - t0) / dur);
-      const e = easeInOut(k);
-      simPosRef.current = {
-        X: start.X + (tgt.X - start.X) * e,
-        Y: start.Y + (tgt.Y - start.Y) * e,
-        Z: start.Z + (tgt.Z - start.Z) * e,
-        G: start.G + (tgt.G - start.G) * e
-      };
-      if (k < 1) raf = requestAnimationFrame(tick);else {
+      const elapsed = t - t0;
+      const next = {};
+      let anyRunning = false;
+      AXES.forEach(a => {
+        const dur = durs[a];
+        if (dur === 0) {
+          next[a] = tgt[a];
+          return;
+        }
+        const k = Math.min(1, elapsed / dur);
+        next[a] = start[a] + (tgt[a] - start[a]) * easeInOut(k);
+        if (k >= 1) {
+          if (!axisDoneRef.current[a]) {
+            axisDoneRef.current[a] = true;
+            setAxisStatus(s => ({
+              ...s,
+              [a]: 'pass'
+            }));
+          }
+        } else {
+          anyRunning = true;
+        }
+      });
+      simPosRef.current = next;
+      if (anyRunning) raf = requestAnimationFrame(tick);else {
         simPosRef.current = {
           ...tgt
         };
@@ -305,7 +409,23 @@ function App() {
       }
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      // If this move is being superseded/cancelled (Hold, E-STOP, new
+      // command) before an axis finished, mark that axis as failed.
+      const unfinished = movedAxesRef.current.filter(a => !axisDoneRef.current[a]);
+      if (unfinished.length) {
+        setAxisStatus(s => {
+          const next = {
+            ...s
+          };
+          unfinished.forEach(a => {
+            next[a] = 'fail';
+          });
+          return next;
+        });
+      }
+    };
     // eslint-disable-next-line
   }, [tgt.X, tgt.Y, tgt.Z, tgt.G]);
 
@@ -554,6 +674,49 @@ function App() {
     });
   };
 
+  // Toggle encoder feedback for a single axis (UI-local toggle for now).
+  const toggleEncoder = axis => {
+    setEncoderEnabled(s => {
+      const next = {
+        ...s,
+        [axis]: !s[axis]
+      };
+      pushLog({
+        kind: 'api',
+        dir: 'POST',
+        target: conn.apiUrl + '/encoder/enable',
+        msg: /*#__PURE__*/React.createElement(React.Fragment, null, '{ ', /*#__PURE__*/React.createElement("span", {
+          className: "k"
+        }, "\"axis\""), ":", /*#__PURE__*/React.createElement("span", {
+          className: "s"
+        }, "\"", axis, "\""), ", ", /*#__PURE__*/React.createElement("span", {
+          className: "k"
+        }, "\"enabled\""), ":", /*#__PURE__*/React.createElement("span", {
+          className: "s"
+        }, String(next[axis])), " ", '}')
+      });
+      return next;
+    });
+  };
+
+  // Clear a fault/error state for a single axis.
+  const resetError = axis => {
+    setAxisStatus(s => ({
+      ...s,
+      [axis]: 'idle'
+    }));
+    pushLog({
+      kind: 'api',
+      dir: 'POST',
+      target: conn.apiUrl + '/error/reset',
+      msg: /*#__PURE__*/React.createElement(React.Fragment, null, '{ ', /*#__PURE__*/React.createElement("span", {
+        className: "k"
+      }, "\"axis\""), ":", /*#__PURE__*/React.createElement("span", {
+        className: "s"
+      }, "\"", axis, "\""), " ", '}')
+    });
+  };
+
   // Read the robot's actual position. The real controller doesn't push
   // position updates, so `pos` only changes here — sampling the in-progress
   // simulated motion held in `simPosRef`.
@@ -678,7 +841,14 @@ function App() {
     }
   };
   useEffect(() => {
-    if (wasMovingRef.current && !moving) drainNext();
+    if (wasMovingRef.current && !moving) {
+      drainNext();
+      // Confirm where the robot actually ended up — only for the axis (or
+      // axes) that were actually commanded to move, same as pressing each
+      // axis's Get Pos button.
+      movedAxesRef.current.forEach(a => getPosition(a));
+      movedAxesRef.current = [];
+    }
     wasMovingRef.current = moving;
     // eslint-disable-next-line
   }, [moving]);
@@ -807,7 +977,7 @@ function App() {
     });
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "app"
+    className: `app ${telemetryOpen ? '' : 'telemetry-collapsed'}`
   }, /*#__PURE__*/React.createElement("header", {
     className: "topbar"
   }, /*#__PURE__*/React.createElement("div", {
@@ -942,7 +1112,11 @@ function App() {
   }, /*#__PURE__*/React.createElement("h2", null, "Robot Movement"), /*#__PURE__*/React.createElement("span", {
     className: "tag"
   }, "click-axis \u2192 drag, step, or type a target")), /*#__PURE__*/React.createElement("div", {
-    className: "move-body"
+    className: "move-body",
+    ref: moveBodyRef,
+    style: {
+      gridTemplateColumns: `1fr 6px ${jogWidth}px`
+    }
   }, /*#__PURE__*/React.createElement("div", {
     className: "stage"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1018,7 +1192,11 @@ function App() {
   }), /*#__PURE__*/React.createElement("div", {
     className: "stage-hint"
   }, /*#__PURE__*/React.createElement("b", null, "Drag"), " empty area: orbit \xB7 ", /*#__PURE__*/React.createElement("b", null, "Shift+Drag"), ": pan \xB7 ", /*#__PURE__*/React.createElement("b", null, "Wheel"), ": zoom \xB7 click a part to jog")), /*#__PURE__*/React.createElement("div", {
-    className: "jog"
+    className: "resizer",
+    onMouseDown: onResizeStart,
+    title: "Drag to resize the axis panel"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: `jog ${jogWidth >= 460 ? 'wide' : ''}`
   }, /*#__PURE__*/React.createElement("div", {
     className: "jog-topbar"
   }, /*#__PURE__*/React.createElement("button", {
@@ -1056,7 +1234,7 @@ function App() {
     const axisStepDisplay = window.AXIS_PARAMS?.[a]?.step || 1;
     return /*#__PURE__*/React.createElement("div", {
       key: a,
-      className: `axis-card ${activeAxis === a ? 'active' : ''}`,
+      className: `axis-card ${activeAxis === a ? 'active' : ''} ${axisStatus[a] === 'moving' ? 'moving' : ''}`,
       onClick: () => setActiveAxis(a)
     }, /*#__PURE__*/React.createElement("div", {
       className: "row"
@@ -1064,7 +1242,9 @@ function App() {
       className: "axis-name"
     }, /*#__PURE__*/React.createElement("span", {
       className: "axis-tag"
-    }, a), RANGE[a].label), /*#__PURE__*/React.createElement("div", {
+    }, a), RANGE[a].label, axisStatus[a] !== 'idle' && /*#__PURE__*/React.createElement("span", {
+      className: `axis-status ${axisStatus[a]}`
+    }, axisStatus[a] === 'moving' ? '● moving' : axisStatus[a] === 'pass' ? '✓ pass' : '✗ fail')), /*#__PURE__*/React.createElement("div", {
       className: "right"
     }, /*#__PURE__*/React.createElement("div", {
       className: "axis-pos-wrap"
@@ -1089,16 +1269,70 @@ function App() {
         e.stopPropagation();
         window.openAxisParam(a);
       }
-    }, "\u2699"))), /*#__PURE__*/React.createElement("div", {
-      className: "meter"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "fill",
-      style: {
-        width: (pos[a] - r.min) / (r.max - r.min) * 100 + '%'
-      }
-    })), /*#__PURE__*/React.createElement("div", {
-      className: `target-row ${isDirty ? 'dirty' : ''}`,
+    }, "\u2699"))), (() => {
+      const previewVal = meterPreview[a];
+      const fillVal = previewVal != null ? previewVal : pos[a];
+      const valFromX = (rect, clientX) => Math.round(clamp(r.min + clamp((clientX - rect.left) / rect.width, 0, 1) * (r.max - r.min), r.min, r.max));
+      return /*#__PURE__*/React.createElement("div", {
+        className: `meter ${previewVal != null ? 'previewing' : ''} ${axisStatus[a] === 'moving' ? 'moving' : ''}`,
+        title: `Click or drag to move ${a} to a pulse position`,
+        onClick: e => e.stopPropagation(),
+        onPointerDown: e => {
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          const v = valFromX(rect, e.clientX);
+          e.currentTarget.setPointerCapture(e.pointerId);
+          meterPreviewRef.current[a] = v;
+          setMeterPreview(p => ({
+            ...p,
+            [a]: v
+          }));
+        },
+        onPointerMove: e => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const v = valFromX(rect, e.clientX);
+          meterPreviewRef.current[a] = v;
+          setMeterPreview(p => ({
+            ...p,
+            [a]: v
+          }));
+        },
+        onPointerUp: e => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+          e.currentTarget.releasePointerCapture(e.pointerId);
+          const target = meterPreviewRef.current[a];
+          delete meterPreviewRef.current[a];
+          setMeterPreview(p => {
+            const n = {
+              ...p
+            };
+            delete n[a];
+            return n;
+          });
+          if (target != null && window.confirm(`Move ${a} (${RANGE[a].label}) to ${target.toLocaleString()} ${motor.unit}?`)) {
+            commit(target);
+          }
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "fill",
+        style: {
+          width: (fillVal - r.min) / (r.max - r.min) * 100 + '%'
+        }
+      }));
+    })(), /*#__PURE__*/React.createElement("div", {
+      className: "axis-range"
+    }, /*#__PURE__*/React.createElement("span", null, "min ", r.min.toLocaleString()), /*#__PURE__*/React.createElement("span", null, "max ", r.max.toLocaleString())), /*#__PURE__*/React.createElement("div", {
+      className: "param-actions",
       onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "param-trio"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "pf target-pf"
+    }, /*#__PURE__*/React.createElement("label", {
+      title: `Target position (${motor.unit})`
+    }, motor.unit), /*#__PURE__*/React.createElement("div", {
+      className: `target-row ${isDirty ? 'dirty' : ''}`
     }, /*#__PURE__*/React.createElement("button", {
       title: `−${axisStepDisplay.toLocaleString()} ${motor.unit}`,
       onClick: () => nudge(-1)
@@ -1117,17 +1351,10 @@ function App() {
         }
       },
       onBlur: e => commit(e.target.value)
-    }), /*#__PURE__*/React.createElement("span", {
-      className: "u"
-    }, motor.unit), /*#__PURE__*/React.createElement("button", {
+    }), /*#__PURE__*/React.createElement("button", {
       title: `+${axisStepDisplay.toLocaleString()} ${motor.unit}`,
       onClick: () => nudge(+1)
-    }, "+")), /*#__PURE__*/React.createElement("div", {
-      className: "axis-range"
-    }, /*#__PURE__*/React.createElement("span", null, "min ", r.min.toLocaleString()), /*#__PURE__*/React.createElement("span", null, "max ", r.max.toLocaleString())), /*#__PURE__*/React.createElement("div", {
-      className: "param-trio",
-      onClick: e => e.stopPropagation()
-    }, /*#__PURE__*/React.createElement("div", {
+    }, "+"))), /*#__PURE__*/React.createElement("div", {
       className: "pf"
     }, /*#__PURE__*/React.createElement("label", {
       title: "Speed (pulse / second)"
@@ -1152,46 +1379,72 @@ function App() {
       defaultValue: window.getAxisParam(a, 'step'),
       onChange: e => window.setAxisParam(a, 'step', +e.target.value || 0)
     }))), /*#__PURE__*/React.createElement("div", {
-      className: "card-actions",
-      onClick: e => e.stopPropagation()
+      className: "card-actions"
     }, /*#__PURE__*/React.createElement("button", {
-      className: `enable-btn ${motorEnabled[a] ? 'on' : ''}`,
-      title: motorEnabled[a] ? `Disable ${a} motor` : `Enable ${a} motor`,
+      className: `enable-btn icon-btn ${motorEnabled[a] ? 'on' : ''}`,
+      title: motorEnabled[a] ? `${a}: Motor On — click to disable` : `${a}: Motor disabled — click to enable`,
       onClick: () => {
         setActiveAxis(a);
         toggleMotor(a);
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, motorEnabled[a] ? '⏼' : '⏻'), /*#__PURE__*/React.createElement("span", null, motorEnabled[a] ? 'On' : 'Enable')), /*#__PURE__*/React.createElement("button", {
-      className: "origin-btn",
-      title: `Move ${a} to origin_pos (${window.AXIS_PARAMS?.[a]?.origin_pos ?? 0})`,
+    }, motorEnabled[a] ? '⏼' : '⏻')), /*#__PURE__*/React.createElement("button", {
+      className: "origin-btn icon-btn",
+      title: `${a}: Move to origin (${window.AXIS_PARAMS?.[a]?.origin_pos ?? 0} ${motor.unit})`,
       onClick: () => {
         setActiveAxis(a);
         originAxis(a);
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, "\u2295"), /*#__PURE__*/React.createElement("span", null, "Origin")), /*#__PURE__*/React.createElement("button", {
-      className: "home-btn",
-      title: `Home ${a} to ${RANGE[a].home}`,
+    }, "\u2295")), /*#__PURE__*/React.createElement("button", {
+      className: "home-btn icon-btn",
+      title: `${a}: Home to ${RANGE[a].home.toLocaleString()} ${motor.unit}`,
       onClick: () => {
         setActiveAxis(a);
         homeAxis(a);
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "icon"
-    }, "\u2302"), /*#__PURE__*/React.createElement("span", null, "Home"))));
+    }, "\u2302")), /*#__PURE__*/React.createElement("button", {
+      className: `encoder-btn icon-btn ${encoderEnabled[a] ? 'on' : ''}`,
+      title: encoderEnabled[a] ? `${a}: Encoder feedback on — click to disable` : `${a}: Encoder feedback off — click to enable`,
+      onClick: () => {
+        setActiveAxis(a);
+        toggleEncoder(a);
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "icon"
+    }, "\u25CE")), /*#__PURE__*/React.createElement("button", {
+      className: "reset-btn icon-btn",
+      title: `${a}: Reset error / fault state`,
+      onClick: () => {
+        setActiveAxis(a);
+        resetError(a);
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "icon"
+    }, "\u27F2")))));
   }))))), /*#__PURE__*/React.createElement("footer", {
     className: "log"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "log-head"
-  }, /*#__PURE__*/React.createElement("span", null, "Live telemetry"), /*#__PURE__*/React.createElement("span", {
+    className: "log-head",
+    onClick: () => setTelemetryOpen(o => !o)
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "log-toggle",
+    title: telemetryOpen ? 'Collapse live telemetry' : 'Expand live telemetry',
+    onClick: e => {
+      e.stopPropagation();
+      setTelemetryOpen(o => !o);
+    }
+  }, telemetryOpen ? '▾' : '▸'), /*#__PURE__*/React.createElement("span", null, "Live telemetry"), /*#__PURE__*/React.createElement("span", {
     style: {
       color: '#5e6268'
     }
-  }, "\xB7"), /*#__PURE__*/React.createElement("span", null, conn.mqttHost, ":", conn.mqttPort), /*#__PURE__*/React.createElement("div", {
-    className: "chips"
+  }, "\xB7"), /*#__PURE__*/React.createElement("span", null, conn.mqttHost, ":", conn.mqttPort), telemetryOpen && /*#__PURE__*/React.createElement("div", {
+    className: "chips",
+    onClick: e => e.stopPropagation()
   }, ['all', 'mqtt', 'api', 'evt', 'err'].map(f => /*#__PURE__*/React.createElement("span", {
     key: f,
     className: `log-chip ${logFilter === f ? 'on' : ''}`,
@@ -1199,7 +1452,7 @@ function App() {
   }, f)), /*#__PURE__*/React.createElement("span", {
     className: "log-chip",
     onClick: () => setLog([])
-  }, "clear"))), /*#__PURE__*/React.createElement("div", {
+  }, "clear"))), telemetryOpen && /*#__PURE__*/React.createElement("div", {
     className: "log-body",
     ref: logRef
   }, log.filter(l => logFilter === 'all' || l.kind === logFilter).map((l, i) => /*#__PURE__*/React.createElement("div", {

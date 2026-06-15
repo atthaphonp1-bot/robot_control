@@ -85,13 +85,21 @@ only updates when explicitly read.
 - `pos` — last *read* position shown in the UI. Updated **only** by:
   - the per-axis **⟲ Get Pos** button (`getPosition(axis)`),
   - the **⟲ Get All** button in the jog topbar (`getAllPositions()`),
-  - a direct drag on the 3D view.
+  - a direct drag on the 3D view,
+  - automatically, once a commanded move finishes (see below).
 - `lastRead` — per-axis timestamp shown as "read HH:MM:SS" / "not read".
 - E-STOP, Hold, and sequence-stop call `holdHere()`, which freezes `tgt` at the
   actual `simPosRef` position (not the possibly-stale `pos`).
 
-When editing movement logic, keep this separation: commands move `tgt`/`simPosRef`;
-they must NOT write `pos` directly (that would re-introduce fake live telemetry).
+When editing movement logic, keep this separation: commands move `tgt`/`simPosRef`
+in real time; they must NOT write `pos` *during* the move (that would
+re-introduce fake live telemetry — the meter/3D view must stay static while
+`axisStatus` is `'moving'`). Once the move completes (`moving` flips back to
+`false`), the effect at the `moving` watcher calls `getPosition(a)` for each
+axis that was actually commanded (`movedAxesRef.current`) — equivalent to the
+user pressing that axis's **⟲ Get Pos** button. This mirrors a real operator
+checking where the robot ended up after a move, without showing a live-updating
+position while it's still moving.
 
 ## Editing the UI — ALWAYS rebuild
 
